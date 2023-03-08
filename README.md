@@ -1,6 +1,6 @@
 # auto_stat_test
 
-# let's test if we can push to gitlab and github simutaniously (9)
+# let's test if we can push to gitlab and github simutaniously (10)
 
 ## Getting started
 
