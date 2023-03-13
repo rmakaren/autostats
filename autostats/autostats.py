@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from scipy import stats
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Callable
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -31,7 +31,8 @@ from sklearn.datasets import load_iris
 
 class AutoStat:
     def __init__(
-        self, dataset: pd.DataFrame = None, 
+        self, 
+        dataset: pd.DataFrame = None, 
         labels: str = None, 
         output_dir: str = None, 
         dependence:str = "independent"
@@ -60,35 +61,34 @@ class AutoStat:
             print("comparing two or more groups")
             return "comparing two or more groups"
 
-    def normality_test(self, dataset: pd.DataFrame, labels: str) -> pd.DataFrame:
-        """_summary_
-
+    def normality_test(self, dataset, labels) -> pd.DataFrame:
+        """Tests for normality of the numerical columns of a dataset grouped by a categorical column.
+        
         Args:
-            dataset (pd.DataFrame): _description_
-            labels (str): _description_
-
+            dataset (pd.DataFrame): The input dataset.
+            labels (str): The name of the categorical column in the dataset.
+        
         Returns:
-            pd.DataFrame: _description_
+            pd.DataFrame: A DataFrame containing the test statistics for each numerical column and category.
         """
+        # Define functions to calculate test statistics
         norm_test = {}
         unique_observations = dataset[labels].unique()
         columns = dataset.columns.tolist()
         columns.remove(labels)
 
-        # Define functions to calculate test statistics
-        shapiro = lambda x: stats.shapiro(x)[0]
-        kolmogorov = lambda x: stats.kstest(x, stats.norm.cdf)[0]
-
-        # Apply functions to calculate test statistics for each column and observation
         for observation in unique_observations:
             ix_a = dataset[labels] == observation
-            subset = dataset.loc[ix_a, columns]
-            norm_test.update(subset.apply(lambda x: {
-                observation + "_shapiro_" + x.name: shapiro(x),
-                observation + "_kolmogorov_" + x.name: kolmogorov(x)
-            }).to_dict())
+            for x in columns:
+                norm_test[observation + "_shapiro_" + x] = stats.shapiro(
+                    dataset[x][ix_a]
+                )[0]
+                norm_test[observation + "_kolmogorov_" + x] = stats.kstest(
+                    dataset[x][ix_a], stats.norm.cdf
+                )[0]
 
         return pd.DataFrame.from_dict(norm_test, orient="index")
+
 
     def variance_test(self, dataset:pd.DataFrame, labels, normality) -> pd.DataFrame:
         """_summary_
@@ -119,7 +119,11 @@ class AutoStat:
         return pd.DataFrame.from_dict(all_variance, orient="index")
 
 
-    def define_stat_test(self, normality, variance, dependence:str = "independent", p_value: float = 0.05) -> function:
+    def define_stat_test(self, 
+                         normality, 
+                         variance, 
+                         dependence:str = "independent", 
+                         p_value: float = 0.05) -> Callable:
         """_summary_"""
 
 
