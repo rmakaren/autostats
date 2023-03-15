@@ -61,7 +61,7 @@ class AutoStat:
             print("comparing two or more groups")
             return "comparing two or more groups"
 
-    def normality_test(self, dataset, labels) -> pd.DataFrame:
+    def normality_test(self, dataset, labels, output_dir) -> pd.DataFrame:
         """Tests for normality of the numerical columns of a dataset grouped by a categorical column.
         
         Args:
@@ -86,6 +86,11 @@ class AutoStat:
                 norm_test[observation + "_kolmogorov_" + x] = stats.kstest(
                     dataset[x][ix_a], stats.norm.cdf
                 )[0]
+                sm.qqplot(dataset[x][ix_a], line ='45')
+                plt.savefig(os.path.join(output_dir, f"qqplot_{x}_{observation}.png"))
+                plt.close()
+
+
 
         return pd.DataFrame.from_dict(norm_test, orient="index")
 
@@ -104,10 +109,7 @@ class AutoStat:
 
         all_variance = {}
         item_list = list(dataset[labels].unique())
-        if pd.Series(normality[0] > 0.05).all():
-            variance_func = stats.bartlett
-        else:
-            variance_func = stats.levene
+        variance_func = stats.bartlett if pd.Series(normality[0] > 0.05).all() else stats.levene
 
         for column in dataset.columns:
             if column != labels:
@@ -162,27 +164,32 @@ class AutoStat:
             pd.DataFrame: _description_
         """
 
-        describe_stats = round(
-            pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
-        )
 
         STAT_TYPE = self.define_analysis_type(dataset, labels)
         if STAT_TYPE == None:
             return ("not enough samples, statistical tests are not applible")
-        normality = self.normality_test(dataset, labels)
+        
+        if os.path.exists(output_dir) == False:
+            os.makedirs(output_dir)
+
+        normality = self.normality_test(dataset, labels, output_dir)
         variance = self.variance_test(dataset, labels, normality)
         stat_test = self.define_stat_test(normality, variance, dependence = "independent")
 
+        describe_stats = round(
+            pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
+        )
+        print(describe_stats)
         for column in dataset.columns:
-            describe_stats.loc[(column, "mean"), "pvalue"] = stat_test(
-                *(
-                    dataset.loc[dataset[labels] == group, column]
-                    for group in dataset[labels].unique()
-                )
-                    )[1]
+            if column != labels:
+                describe_stats.loc[(column, "mean"), "pvalue"] = stat_test(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
 
-        if os.path.exists(output_dir) == False:
-            os.makedirs(output_dir)
+
         for column in dataset.columns:
             if column not in labels:
                 sns.violinplot(data=dataset, x=labels, y=column)
