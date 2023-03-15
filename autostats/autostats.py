@@ -37,6 +37,14 @@ class AutoStat:
         output_dir: str = None, 
         dependence:str = "independent"
     ) -> None:
+        """_summary_
+
+        Args:
+            dataset (pd.DataFrame, optional): _description_. Defaults to None.
+            labels (str, optional): _description_. Defaults to None.
+            output_dir (str, optional): _description_. Defaults to None.
+            dependence (str, optional): _description_. Defaults to "independent".
+        """
 
         self.dataset = dataset
         self.labels = labels
@@ -86,11 +94,36 @@ class AutoStat:
                 norm_test[observation + "_kolmogorov_" + x] = stats.kstest(
                     dataset[x][ix_a], stats.norm.cdf
                 )[0]
-                sm.qqplot(dataset[x][ix_a], line ='45')
-                plt.savefig(os.path.join(output_dir, f"qqplot_{x}_{observation}.png"))
+
+                # visualise with qqplots
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                res = stats.probplot(dataset[x][ix_a], dist ='norm', plot=ax)
+                ax.set_title(f"qqplot_norm_{x}_{observation}")
+                plt.savefig(os.path.join(output_dir, f"qqplot_norm_{x}_{observation}.png"))
                 plt.close()
 
+        # for observation in unique_observations:
+        #     ix_a = dataset[labels] == observation
+        #     for x in columns:
+        #         norm_test["shapiro_test"] = stats.shapiro(
+        #             dataset[x][ix_a]
+        #         )[0]
+        #         norm_test["kolmogorov_test"] = stats.kstest(
+        #             dataset[x][ix_a], stats.norm.cdf
+        #         )[0]
 
+        #         # visualise with qqplots
+        #         fig = plt.figure()
+        #         ax = fig.add_subplot(111)
+        #         res = stats.probplot(dataset[x][ix_a], dist ='norm', plot=ax)
+        #         ax.set_title(f"qqplot_norm_{x}_{observation}")
+        #         plt.savefig(os.path.join(output_dir, f"qqplot_norm_{observation}_{x}.png"))
+        #         plt.close()
+
+        # save the results of normality test
+        norm_test_df = pd.DataFrame(norm_test, index=[0]).T
+        norm_test_df.to_csv(os.path.join(output_dir, "norm_test.csv"))
 
         return pd.DataFrame.from_dict(norm_test, orient="index")
 
@@ -126,7 +159,18 @@ class AutoStat:
                          variance, 
                          dependence:str = "independent", 
                          p_value: float = 0.05) -> Callable:
-        """_summary_"""
+        """_summary_
+
+        Args:
+            normality (_type_): _description_
+            variance (_type_): _description_
+            dependence (str, optional): _description_. Defaults to "independent".
+            p_value (float, optional): _description_. Defaults to 0.05.
+
+        Returns:
+            Callable: _description_
+        """
+        
 
 
         if pd.Series(normality[0] > p_value).all():
@@ -196,10 +240,10 @@ class AutoStat:
                 sns.violinplot(data=dataset, x=labels, y=column).set(
                     title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
                 )
-                plt.savefig(os.path.join(output_dir, f"comp_stat_{column}.png"))
+                plt.savefig(os.path.join(output_dir, f"comp_plot_{column}.png"))
                 plt.clf()
 
-        describe_stats.to_csv(os.path.join(output_dir, f"comp_stat.csv"))
+        describe_stats.to_csv(os.path.join(output_dir, f"comp_stats.csv"))
         return describe_stats, normality
 
 
