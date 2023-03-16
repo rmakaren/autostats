@@ -1,4 +1,5 @@
 import os
+import copy
 import pandas as pd
 from scipy import stats
 from typing import List, Dict, Union, Callable
@@ -79,8 +80,12 @@ class AutoStat:
         Returns:
             pd.DataFrame: A DataFrame containing the test statistics for each numerical column and category.
         """
+
+
+
         # Define functions to calculate test statistics
         norm_test = {}
+        norm_test2 = {}
         unique_observations = dataset[labels].unique()
         columns = dataset.columns.tolist()
         columns.remove(labels)
@@ -95,6 +100,7 @@ class AutoStat:
                     dataset[x][ix_a], stats.norm.cdf
                 )[0]
 
+
                 # visualise with qqplots
                 fig = plt.figure()
                 ax = fig.add_subplot(111)
@@ -102,6 +108,18 @@ class AutoStat:
                 ax.set_title(f"qqplot_norm_{x}_{observation}")
                 plt.savefig(os.path.join(output_dir, f"qqplot_norm_{x}_{observation}.png"))
                 plt.close()
+
+        norm_test2 = copy.deepcopy(norm_test)
+        for observation in unique_observations:
+            ix_a = dataset[labels] == observation
+            for x in columns:
+                norm_test2[observation + "_kurtosis_" + x] = stats.kurtosis(
+                    dataset[x][ix_a]
+                )
+                norm_test2[observation + "_skewness_" + x] = stats.skew(
+                    dataset[x][ix_a]
+                )
+
 
         # for observation in unique_observations:
         #     ix_a = dataset[labels] == observation
@@ -122,7 +140,7 @@ class AutoStat:
         #         plt.close()
 
         # save the results of normality test
-        norm_test_df = pd.DataFrame(norm_test, index=[0]).T
+        norm_test_df = pd.DataFrame(norm_test2, index=[0]).T
         norm_test_df.to_csv(os.path.join(output_dir, "norm_test.csv"))
 
         return pd.DataFrame.from_dict(norm_test, orient="index")
@@ -170,7 +188,6 @@ class AutoStat:
         Returns:
             Callable: _description_
         """
-        
 
 
         if pd.Series(normality[0] > p_value).all():
@@ -195,6 +212,7 @@ class AutoStat:
                     stat_test = stats.median_test
                 elif dependence == "paired":
                     stat_test = stats.wilcoxon
+        print("stat test", stat_test)
         return stat_test
 
     def auto_stat_test(self, dataset, labels, output_dir) -> pd.DataFrame:
@@ -218,15 +236,15 @@ class AutoStat:
 
         normality = self.normality_test(dataset, labels, output_dir)
         variance = self.variance_test(dataset, labels, normality)
-        stat_test = self.define_stat_test(normality, variance, dependence = "independent")
+        s_test = self.define_stat_test(normality, variance, dependence = "independent")
 
         describe_stats = round(
             pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
         )
-        print(describe_stats)
+        # print(describe_stats)
         for column in dataset.columns:
             if column != labels:
-                describe_stats.loc[(column, "mean"), "pvalue"] = stat_test(
+                describe_stats.loc[(column, "mean"), "pvalue"] = s_test(
                     *(
                         dataset.loc[dataset[labels] == group, column]
                         for group in dataset[labels].unique()
