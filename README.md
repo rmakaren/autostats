@@ -1,6 +1,6 @@
-# auto_stat_test
+# autostats
 
-# let's test if we can push to gitlab and github simutaniously (10)
+
 
 ## Getting started
 
@@ -15,14 +15,14 @@ Already a pro? Just edit this README.md and make it your own. Want to make it ea
 
 ```
 cd existing_repo
-git remote add origin http://localhost/gitlab-instance-f8876439/auto_stat_test.git
+git remote add origin http://localhost/rmakaren/autostats.git
 git branch -M main
 git push -uf origin main
 ```
 
 ## Integrate with your tools
 
-- [ ] [Set up project integrations](http://localhost/gitlab-instance-f8876439/auto_stat_test/-/settings/integrations)
+- [ ] [Set up project integrations](http://localhost/rmakaren/autostats/-/settings/integrations)
 
 ## Collaborate with your team
 

@@ -120,25 +120,6 @@ class AutoStat:
                     dataset[x][ix_a]
                 )
 
-
-        # for observation in unique_observations:
-        #     ix_a = dataset[labels] == observation
-        #     for x in columns:
-        #         norm_test["shapiro_test"] = stats.shapiro(
-        #             dataset[x][ix_a]
-        #         )[0]
-        #         norm_test["kolmogorov_test"] = stats.kstest(
-        #             dataset[x][ix_a], stats.norm.cdf
-        #         )[0]
-
-        #         # visualise with qqplots
-        #         fig = plt.figure()
-        #         ax = fig.add_subplot(111)
-        #         res = stats.probplot(dataset[x][ix_a], dist ='norm', plot=ax)
-        #         ax.set_title(f"qqplot_norm_{x}_{observation}")
-        #         plt.savefig(os.path.join(output_dir, f"qqplot_norm_{observation}_{x}.png"))
-        #         plt.close()
-
         # save the results of normality test
         norm_test_df = pd.DataFrame(norm_test2, index=[0]).T
         norm_test_df.to_csv(os.path.join(output_dir, "norm_test.csv"))
@@ -215,7 +196,43 @@ class AutoStat:
         print("stat test", stat_test)
         return stat_test
 
-    def auto_stat_test(self, dataset, labels, output_dir) -> pd.DataFrame:
+    def make_stat_report(self, dataset:pd.DataFrame, labels:str, stat_test:Callable, output_dir:str) -> None:
+        """_summary_
+
+        Args:
+            dataset (pd.DataFrame): _description_
+            labels (_type_): _description_
+            stat_test (Callable): _description_
+            output_dir (_type_): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+
+        describe_stats = round(
+            pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
+        )
+        # print(describe_stats)
+        for column in dataset.columns:
+            if column != labels:
+                describe_stats.loc[(column, "mean"), "pvalue"] = stat_test(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+
+                sns.violinplot(data=dataset, x=labels, y=column)
+                sns.violinplot(data=dataset, x=labels, y=column).set(
+                    title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
+                )
+                plt.savefig(os.path.join(output_dir, f"compplot_{column}.png"))
+                plt.clf()
+
+        describe_stats.to_csv(os.path.join(output_dir, f"comp_stats.csv"))
+
+
+    def auto_stat_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> None:
         """_summary_
 
         Args:
@@ -237,40 +254,12 @@ class AutoStat:
         normality = self.normality_test(dataset, labels, output_dir)
         variance = self.variance_test(dataset, labels, normality)
         s_test = self.define_stat_test(normality, variance, dependence = "independent")
+        self.make_stat_report(dataset, labels, s_test, output_dir)
 
-        describe_stats = round(
-            pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
-        )
-        # print(describe_stats)
-        for column in dataset.columns:
-            if column != labels:
-                describe_stats.loc[(column, "mean"), "pvalue"] = s_test(
-                    *(
-                        dataset.loc[dataset[labels] == group, column]
-                        for group in dataset[labels].unique()
-                    )
-                        )[1]
-
-
-        for column in dataset.columns:
-            if column not in labels:
-                sns.violinplot(data=dataset, x=labels, y=column)
-                sns.violinplot(data=dataset, x=labels, y=column).set(
-                    title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
-                )
-                plt.savefig(os.path.join(output_dir, f"comp_plot_{column}.png"))
-                plt.clf()
-
-        describe_stats.to_csv(os.path.join(output_dir, f"comp_stats.csv"))
-        return describe_stats, normality
-
-
-############################################""#
-# EVERYTHING BELOW HERE IS TO TEST THE CODE #
-#############################################
 
 if __name__ == "main":
 
+    print("starting")
     iris = load_iris()
     df_iris = pd.DataFrame(
         data=np.c_[iris["data"], iris["target"]],
@@ -283,3 +272,4 @@ if __name__ == "main":
 
     stat_test = AutoStat()
     stat_test.auto_stat_test(dataset=df_iris, labels="species")
+    print("done")
