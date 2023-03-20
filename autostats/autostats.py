@@ -13,6 +13,8 @@ import statsmodels.api as sm
 from statsmodels.formula.api import ols
 
 import warnings
+import time
+
 
 warnings.filterwarnings("ignore")
 
@@ -52,6 +54,55 @@ class AutoStat:
         self.output_dir = output_dir
         self.dependence = dependence
 
+    def preprocessing(self, dataset:pd.DataFrame, labels:str) -> pd.DataFrame:
+        """Cleaning the dataframe from missing values, duplicates, and infinite values,
+        and dropping the labels column.
+
+        Args:
+            dataset (pd.DataFrame): _description_
+            labels (str): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+
+        # drop missing values, duplicates, and infinite values
+        dataset = dataset.dropna()
+        dataset = dataset.reset_index(drop=True)
+        dataset = dataset.drop_duplicates()
+        dataset = dataset.reset_index(drop=True)
+        dataset = dataset.replace([np.inf, -np.inf], np.nan)
+        dataset = dataset.dropna()
+        # dataset = dataset.drop(columns=[labels])
+        dataset = dataset.reset_index(drop=True)
+
+        # check if the dataset is empty
+        if dataset.empty:
+            print("The dataset is empty")
+            return None
+        
+        # check if the dataset has only one column
+        elif len(dataset.columns) == 1:
+            print("The dataset has only one column")
+            return None
+
+        # check if the dataset has only one row
+        elif len(dataset) == 1:
+            print("The dataset has only one row")
+            return None
+        
+        # check if the dataset has only one unique value
+        elif len(dataset[labels].unique()) == 1:
+            print("The dataset has only one unique value")
+            return None
+        
+        # check if labels are either strings or integers
+        elif not all(isinstance(x, (str, int)) for x in dataset[labels]):
+            print("Not categorical variables for groups: labels are neither strings nor integers")
+            return None
+
+        return dataset
+
     def define_analysis_type(self, dataset, labels) -> Union[str, None]:
         """Setting up statistical tests to check
 
@@ -80,7 +131,6 @@ class AutoStat:
         Returns:
             pd.DataFrame: A DataFrame containing the test statistics for each numerical column and category.
         """
-
 
 
         # Define functions to calculate test statistics
@@ -126,7 +176,6 @@ class AutoStat:
 
         return pd.DataFrame.from_dict(norm_test, orient="index")
 
-
     def variance_test(self, dataset:pd.DataFrame, labels, normality) -> pd.DataFrame:
         """_summary_
 
@@ -150,8 +199,13 @@ class AutoStat:
                     dataset[dataset[labels] == item_list[1]][column],
                 )
                 all_variance[column] = variances_test[0]
+
         return pd.DataFrame.from_dict(all_variance, orient="index")
 
+
+        # results = dataset.groupby('species').apply(lambda x: variance_func(*[x.loc[:, col] for col in x.columns if col != 'species'])) 
+        # print(results)
+        # return results
 
     def define_stat_test(self, 
                          normality, 
@@ -243,11 +297,15 @@ class AutoStat:
             pd.DataFrame: _description_
         """
 
+        
+        start_time = time.time()
 
         STAT_TYPE = self.define_analysis_type(dataset, labels)
         if STAT_TYPE == None:
             return ("not enough samples, statistical tests are not applible")
         
+        dataset = self.preprocessing(dataset, labels)
+
         if os.path.exists(output_dir) == False:
             os.makedirs(output_dir)
 
@@ -255,6 +313,8 @@ class AutoStat:
         variance = self.variance_test(dataset, labels, normality)
         s_test = self.define_stat_test(normality, variance, dependence = "independent")
         self.make_stat_report(dataset, labels, s_test, output_dir)
+        print("--- %s seconds ---" % (time.time() - start_time))
+
 
 
 if __name__ == "main":
