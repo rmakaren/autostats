@@ -176,6 +176,7 @@ class AutoStat:
 
         return pd.DataFrame.from_dict(norm_test, orient="index")
 
+
     def variance_test(self, dataset:pd.DataFrame, labels, normality) -> pd.DataFrame:
         """_summary_
 
@@ -188,24 +189,33 @@ class AutoStat:
             pd.DataFrame: _description_
         """
 
-        all_variance = {}
-        item_list = list(dataset[labels].unique())
-        variance_func = stats.bartlett if pd.Series(normality[0] > 0.05).all() else stats.levene
+        # all_variance = {}
+        # item_list = list(dataset[labels].unique())
+        # variance_func = stats.bartlett if pd.Series(normality[0] > 0.05).all() else stats.levene
 
-        for column in dataset.columns:
-            if column != labels:
-                variances_test = variance_func(
-                    dataset[dataset[labels] == item_list[0]][column],
-                    dataset[dataset[labels] == item_list[1]][column],
-                )
-                all_variance[column] = variances_test[0]
+        # for column in dataset.columns:
+        #     if column != labels:
+        #         variances_test = variance_func(
+        #             dataset[dataset[labels] == item_list[0]][column],
+        #             dataset[dataset[labels] == item_list[1]][column],
+        #         )
+        #         all_variance[column] = variances_test[0]
 
-        return pd.DataFrame.from_dict(all_variance, orient="index")
+        # return pd.DataFrame.from_dict(all_variance, orient="index")
 
 
         # results = dataset.groupby('species').apply(lambda x: variance_func(*[x.loc[:, col] for col in x.columns if col != 'species'])) 
         # print(results)
         # return results
+
+        variance_test = stats.bartlett if pd.Series(normality[0] > 0.05).all() else stats.levene
+
+        groups = dataset.groupby(labels)
+
+        return dataset.drop('species', axis=1)\
+            .apply(lambda x: variance_test(*[group[x.name] for name, group in groups]))\
+                .rename(index={0: 'statistic', 1: 'p-value'})
+
 
     def define_stat_test(self, 
                          normality, 
@@ -311,6 +321,7 @@ class AutoStat:
 
         normality = self.normality_test(dataset, labels, output_dir)
         variance = self.variance_test(dataset, labels, normality)
+        print(variance)
         s_test = self.define_stat_test(normality, variance, dependence = "independent")
         self.make_stat_report(dataset, labels, s_test, output_dir)
         print("--- %s seconds ---" % (time.time() - start_time))
