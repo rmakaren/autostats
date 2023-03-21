@@ -141,15 +141,18 @@ class AutoStat:
         columns = dataset.columns.tolist()
         columns.remove(labels)
 
+        # calculate test statistics
         for observation in unique_observations:
             ix_a = dataset[labels] == observation
             for x in columns:
-                norm_test[observation + "_shapiro_" + x] = stats.shapiro(
-                    dataset[x][ix_a]
-                )[0]
-                norm_test[observation + "_kolmogorov_" + x] = stats.kstest(
-                    dataset[x][ix_a], stats.norm.cdf
-                )[0]
+                if len(dataset) < 50:
+                    norm_test[observation + "_shapiro_" + x] = stats.shapiro(
+                        dataset[x][ix_a]
+                    )[0]
+                else:
+                    norm_test[observation + "_kolmogorov_" + x] = stats.kstest(
+                        dataset[x][ix_a], stats.norm.cdf
+                    )[0]
 
 
                 # visualise with qqplots
@@ -160,19 +163,19 @@ class AutoStat:
                 plt.savefig(os.path.join(norm_dir, f"qqplot_norm_{x}_{observation}.png"))
                 plt.close()
 
-        norm_test2 = copy.deepcopy(norm_test)
-        for observation in unique_observations:
-            ix_a = dataset[labels] == observation
-            for x in columns:
-                norm_test2[observation + "_kurtosis_" + x] = stats.kurtosis(
-                    dataset[x][ix_a]
-                )
-                norm_test2[observation + "_skewness_" + x] = stats.skew(
-                    dataset[x][ix_a]
-                )
+        # norm_test2 = copy.deepcopy(norm_test)
+        # for observation in unique_observations:
+        #     ix_a = dataset[labels] == observation
+        #     for x in columns:
+        #         norm_test2[observation + "_kurtosis_" + x] = stats.kurtosis(
+        #             dataset[x][ix_a]
+        #         )
+        #         norm_test2[observation + "_skewness_" + x] = stats.skew(
+        #             dataset[x][ix_a]
+        #         )
 
         # save the results of normality test
-        norm_test_df = pd.DataFrame(norm_test2, index=[0]).T
+        norm_test_df = pd.DataFrame(norm_test, index=[0]).T
         
         norm_test_df.to_csv(os.path.join(norm_dir, "norm_test.csv"))
         return pd.DataFrame.from_dict(norm_test, orient="index")
