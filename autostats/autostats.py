@@ -131,7 +131,8 @@ class AutoStat:
         Returns:
             pd.DataFrame: A DataFrame containing the test statistics for each numerical column and category.
         """
-
+        norm_dir = os.path.join(output_dir, "normality_test")
+        os.makedirs(os.path.join(norm_dir), exist_ok=True)
 
         # Define functions to calculate test statistics
         norm_test = {}
@@ -156,7 +157,7 @@ class AutoStat:
                 ax = fig.add_subplot(111)
                 res = stats.probplot(dataset[x][ix_a], dist ='norm', plot=ax)
                 ax.set_title(f"qqplot_norm_{x}_{observation}")
-                plt.savefig(os.path.join(output_dir, f"qqplot_norm_{x}_{observation}.png"))
+                plt.savefig(os.path.join(norm_dir, f"qqplot_norm_{x}_{observation}.png"))
                 plt.close()
 
         norm_test2 = copy.deepcopy(norm_test)
@@ -172,8 +173,8 @@ class AutoStat:
 
         # save the results of normality test
         norm_test_df = pd.DataFrame(norm_test2, index=[0]).T
-        norm_test_df.to_csv(os.path.join(output_dir, "norm_test.csv"))
-
+        
+        norm_test_df.to_csv(os.path.join(norm_dir, "norm_test.csv"))
         return pd.DataFrame.from_dict(norm_test, orient="index")
 
 
@@ -188,25 +189,6 @@ class AutoStat:
         Returns:
             pd.DataFrame: _description_
         """
-
-        # all_variance = {}
-        # item_list = list(dataset[labels].unique())
-        # variance_func = stats.bartlett if pd.Series(normality[0] > 0.05).all() else stats.levene
-
-        # for column in dataset.columns:
-        #     if column != labels:
-        #         variances_test = variance_func(
-        #             dataset[dataset[labels] == item_list[0]][column],
-        #             dataset[dataset[labels] == item_list[1]][column],
-        #         )
-        #         all_variance[column] = variances_test[0]
-
-        # return pd.DataFrame.from_dict(all_variance, orient="index")
-
-
-        # results = dataset.groupby('species').apply(lambda x: variance_func(*[x.loc[:, col] for col in x.columns if col != 'species'])) 
-        # print(results)
-        # return results
 
         variance_test = stats.bartlett if pd.Series(normality[0] > 0.05).all() else stats.levene
 
@@ -236,23 +218,23 @@ class AutoStat:
 
 
         if pd.Series(normality[0] > p_value).all():
-            if pd.Series(variance[0] > p_value).all():
+            if pd.Series(variance.iloc[1] > p_value).all():
                 if dependence == "independent":
                     stat_test = stats.f_oneway
                 elif dependence == "paired":
                     stat_test = AnovaRM 
-            elif pd.Series(variance[0] < p_value).all():
+            elif pd.Series(variance.iloc[1] < p_value).any():
                 if dependence == "independent":
                     stat_test = pg.welch_anova
                 elif dependence == "paired":
                     stat_test = sm.stats.anova_lm
-        elif pd.Series(normality[0] < p_value).all():
-            if pd.Series(variance[0] > p_value).all():
+        elif pd.Series(normality[0] < p_value).any():
+            if pd.Series(variance.iloc[1] > p_value).all():
                 if dependence == "independent":
                     stat_test = stats.kruskal
                 elif dependence == "paired":
                     stat_test = stats.friedmanchisquare
-            elif pd.Series(variance[0] < p_value).all():
+            elif pd.Series(variance.iloc[1] < p_value).any():
                 if dependence == "independent":
                     stat_test = stats.median_test
                 elif dependence == "paired":
@@ -276,22 +258,25 @@ class AutoStat:
         describe_stats = round(
             pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
         )
-        # print(describe_stats)
-        for column in dataset.columns:
-            if column != labels:
+        for column in dataset.columns.drop(labels):
+            if stat_test != pg.welch_anova:
                 describe_stats.loc[(column, "mean"), "pvalue"] = stat_test(
                     *(
                         dataset.loc[dataset[labels] == group, column]
                         for group in dataset[labels].unique()
                     )
                         )[1]
+            elif stat_test == pg.welch_anova:
+                describe_stats.loc[(column, "mean"), "pvalue"] = stat_test(
+                    dataset, dv=column, between=labels
+                )["p-unc"][0]
 
-                sns.violinplot(data=dataset, x=labels, y=column)
-                sns.violinplot(data=dataset, x=labels, y=column).set(
+            sns.violinplot(data=dataset, x=labels, y=column)
+            sns.violinplot(data=dataset, x=labels, y=column).set(
                     title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
                 )
-                plt.savefig(os.path.join(output_dir, f"compplot_{column}.png"))
-                plt.clf()
+            plt.savefig(os.path.join(output_dir, f"compplot_{column}.png"))
+            plt.clf()
 
         describe_stats.to_csv(os.path.join(output_dir, f"comp_stats.csv"))
 
@@ -321,7 +306,7 @@ class AutoStat:
 
         normality = self.normality_test(dataset, labels, output_dir)
         variance = self.variance_test(dataset, labels, normality)
-        print(variance)
+        # print(variance)
         s_test = self.define_stat_test(normality, variance, dependence = "independent")
         self.make_stat_report(dataset, labels, s_test, output_dir)
         print("--- %s seconds ---" % (time.time() - start_time))
