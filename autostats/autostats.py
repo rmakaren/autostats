@@ -121,41 +121,36 @@ class AutoStat:
             print("comparing two or more groups")
             return "comparing two or more groups"
 
-    def normality_test(self, dataset, labels, output_dir) -> pd.DataFrame:
-        """Tests for normality of the numerical columns of a dataset grouped by a categorical column.
-        
-        Args:
-            dataset (pd.DataFrame): The input dataset.
-            labels (str): The name of the categorical column in the dataset.
-        
-        Returns:
-            pd.DataFrame: A DataFrame containing the test statistics for each numerical column and category.
-        """
-        norm_dir = os.path.join(output_dir, "normality_test")
-        os.makedirs(os.path.join(norm_dir), exist_ok=True)
 
-        # Define functions to calculate test statistics
-        norm_test = {}
-        norm_test2 = {}
+    def normality_test(self, dataset, labels, output_dir) -> pd.DataFrame:
+
+
+        def normality_tests(dataset):
+            results = {}
+            for col in dataset.drop(labels, axis = 1).columns:
+                if len(dataset)<= 50:
+                    print(f"using shapiro test for {col}")
+                    _, shapiro_pval = stats.shapiro(dataset[col])
+                    results[col] = {"shapiro": shapiro_pval}
+                elif len(dataset)>50:
+                    print(f"using ks test for {col}")
+                    _, ks_pval = stats.kstest(dataset[col], "norm")
+                    results[col] = {"ks": ks_pval}
+            return pd.DataFrame(results)
+
+        norm_res = dataset.groupby([labels]).apply(normality_tests)
+
+        # visualise results of normality tests with qqplots
+        norm_dir = os.path.join(output_dir, "normality_test")
+        os.makedirs(norm_dir, exist_ok=True)
+
         unique_observations = dataset[labels].unique()
         columns = dataset.columns.tolist()
         columns.remove(labels)
-
         # calculate test statistics
         for observation in unique_observations:
             ix_a = dataset[labels] == observation
             for x in columns:
-                if len(dataset) < 50:
-                    norm_test[observation + "_shapiro_" + x] = stats.shapiro(
-                        dataset[x][ix_a]
-                    )[0]
-                else:
-                    norm_test[observation + "_kolmogorov_" + x] = stats.kstest(
-                        dataset[x][ix_a], stats.norm.cdf
-                    )[0]
-
-
-                # visualise with qqplots
                 fig = plt.figure()
                 ax = fig.add_subplot(111)
                 res = stats.probplot(dataset[x][ix_a], dist ='norm', plot=ax)
@@ -163,23 +158,9 @@ class AutoStat:
                 plt.savefig(os.path.join(norm_dir, f"qqplot_norm_{x}_{observation}.png"))
                 plt.close()
 
-        # norm_test2 = copy.deepcopy(norm_test)
-        # for observation in unique_observations:
-        #     ix_a = dataset[labels] == observation
-        #     for x in columns:
-        #         norm_test2[observation + "_kurtosis_" + x] = stats.kurtosis(
-        #             dataset[x][ix_a]
-        #         )
-        #         norm_test2[observation + "_skewness_" + x] = stats.skew(
-        #             dataset[x][ix_a]
-        #         )
-
         # save the results of normality test
-        norm_test_df = pd.DataFrame(norm_test, index=[0]).T
-        
-        norm_test_df.to_csv(os.path.join(norm_dir, "norm_test.csv"))
-        return pd.DataFrame.from_dict(norm_test, orient="index")
-
+        norm_res.to_csv(os.path.join(norm_dir, "norm_test.csv"))
+        return norm_res
 
     def variance_test(self, dataset:pd.DataFrame, labels, normality) -> pd.DataFrame:
         """_summary_
@@ -193,13 +174,40 @@ class AutoStat:
             pd.DataFrame: _description_
         """
 
-        variance_test = stats.bartlett if pd.Series(normality[0] > 0.05).all() else stats.levene
+        def variance_tests(dataset):
+            results = {}
+            if pd.Series(normality[0] > 0.05).all():
+                if len(dataset) <= 50:
+                    print(f"using levene's test for {col}")
+                    _, levene_pval = stats.levene(dataset[col])
+                    results[col] = {"levene": levene_pval}
+                elif len(dataset) > 50:
+                    print(f"using bartlett's test for {col}")
+                    _, bartlett_pval = stats.bartlett(dataset[col])
+                    results[col] = {"barlett": bartlett_pval}
+            elif not pd.Series(normality[0] < 0.05).any():
+                if len(dataset) <= 50:
+                    print()
 
-        groups = dataset.groupby(labels)
+                for col in dataset.drop(labels, axis = 1).columns:
+                    if len(dataset)<= 50:
+                        print(f"using shapiro test for {col}")
+                        _, shapiro_pval = stats.shapiro(dataset[col])
+                        results[col] = {"shapiro": shapiro_pval}
+                    elif len(dataset)>50:
+                        print(f"using ks test for {col}")
+                        _, ks_pval = stats.kstest(dataset[col], "norm")
+                        results[col] = {"ks": ks_pval}
+            return pd.DataFrame(results)
 
-        return dataset.drop('species', axis=1)\
-            .apply(lambda x: variance_test(*[group[x.name] for name, group in groups]))\
-                .rename(index={0: 'statistic', 1: 'p-value'})
+
+        # variance_test = stats.bartlett if pd.Series(normality[0] > 0.05).all() else stats.levene
+
+        # groups = dataset.groupby(labels)
+
+        # return dataset.drop('species', axis=1)\
+        #     .apply(lambda x: variance_test(*[group[x.name] for name, group in groups]))\
+        #         .rename(index={0: 'statistic', 1: 'p-value'})
 
 
     def define_stat_test(self, 
@@ -313,6 +321,7 @@ class AutoStat:
         s_test = self.define_stat_test(normality, variance, dependence = "independent")
         self.make_stat_report(dataset, labels, s_test, output_dir)
         print("--- %s seconds ---" % (time.time() - start_time))
+        return normality
 
 
 
