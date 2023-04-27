@@ -173,7 +173,7 @@ class AutoStat:
         norm_res.to_csv(os.path.join(norm_dir, "norm_test.csv"))
         return norm_res
 
-    def variance_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame) -> pd.DataFrame:
+    def variance_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, output_dir:str) -> pd.DataFrame:
         """We perform test for equality of variances between groups 
         (both on normally and non-normally distributed data) 
         to choose an appropriate test for statistical analysis for group comparison. 
@@ -194,7 +194,7 @@ class AutoStat:
             pd.DataFrame: _description_
         """
         
-        res = {}
+        var_res = {}
         for column in dataset.drop(labels, axis = 1):
             if all(norm_res[column] > 0.05):
                 stat_test = stats.levene
@@ -202,9 +202,12 @@ class AutoStat:
             elif any(norm_res[column] < 0.05):
                 stat_test = stats.levene
                 center = "median"
-            res[f"{column}_levene_{center}"] = round(stat_test(*(dataset.loc[dataset[labels] == group, column] 
+            var_res[column] = round(stat_test(*(dataset.loc[dataset[labels] == group, column] 
                         for group in dataset[labels].unique()), center=center)[1], 7)
-        return pd.DataFrame.from_dict(res, orient='index', columns=["variance_test"])
+        
+        var_res = pd.DataFrame.from_dict(var_res, orient='index', columns=["variance_test"]).T
+        var_res.to_csv(path_or_buf=os.path.join(output_dir, "var_test.csv"))
+        return var_res
 
 
     def define_stat_test(self, 
@@ -313,7 +316,7 @@ class AutoStat:
             os.makedirs(output_dir)
 
         norm_res = self.normality_test(dataset, labels, output_dir)
-        variance = self.variance_test(dataset, labels, norm_res)
+        variance = self.variance_test(dataset, labels, norm_res, output_dir)
         print(variance)
         s_test = self.define_stat_test(norm_res, variance, dependence = "independent")
         self.make_stat_report(dataset, labels, s_test, output_dir)
