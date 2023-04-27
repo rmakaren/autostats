@@ -253,7 +253,7 @@ class AutoStat:
         print("stat test", stat_test)
         return stat_test
 
-    def make_stat_report(self, dataset:pd.DataFrame, labels:str, stat_test:Callable, output_dir:str) -> None:
+    def make_stat_report(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, var_res:pd.DataFrame, output_dir:str, dependence:str) -> None:
         """_summary_
 
         Args:
@@ -270,17 +270,50 @@ class AutoStat:
             pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
         )
         for column in dataset.columns.drop(labels):
-            if stat_test != pg.welch_anova:
-                describe_stats.loc[(column, "mean"), "pvalue"] = stat_test(
+            if all(norm_res[column] > 0.05) & var_res[column] > 0.05:
+                if dependence == "independent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.f_oneway(
                     *(
                         dataset.loc[dataset[labels] == group, column]
                         for group in dataset[labels].unique()
                     )
                         )[1]
-            elif stat_test == pg.welch_anova:
-                describe_stats.loc[(column, "mean"), "pvalue"] = stat_test(
-                    dataset, dv=column, between=labels
-                )["p-unc"][0]
+                if dependence == "dependent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = AnovaRM(                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+            if all(norm_res[column] < 0.05) & var_res[column] > 0.05:
+                if dependence == "independent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.kruskal(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+                if dependence == "dependent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.friedmanchisquare(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+            if all(norm_res[column] < 0.05) & var_res[column] < 0.05:
+                if dependence == "independent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.median_test(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+                if dependence == "dependent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.wilcoxon(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
 
             sns.violinplot(data=dataset, x=labels, y=column)
             sns.violinplot(data=dataset, x=labels, y=column).set(
@@ -316,10 +349,8 @@ class AutoStat:
             os.makedirs(output_dir)
 
         norm_res = self.normality_test(dataset, labels, output_dir)
-        variance = self.variance_test(dataset, labels, norm_res, output_dir)
-        print(variance)
-        s_test = self.define_stat_test(norm_res, variance, dependence = "independent")
-        self.make_stat_report(dataset, labels, s_test, output_dir)
+        var_res = self.variance_test(dataset, labels, norm_res, output_dir)
+        self.make_stat_report(dataset, labels, norm_res, var_res, output_dir, dependence="independent")
         print("--- %s seconds ---" % (time.time() - start_time))
         return norm_res
 
