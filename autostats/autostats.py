@@ -140,11 +140,11 @@ class AutoStat:
             results = {}
             for col in dataset.drop(labels, axis = 1).columns:
                 if len(dataset)<= 50:
-                    print(f"using shapiro test for {col}")
+                    # print(f"using shapiro test for {col}")
                     _, shapiro_pval = stats.shapiro(dataset[col])
                     results[col] = {"shapiro": shapiro_pval}
                 elif len(dataset)>50:
-                    print(f"using ks test for {col}")
+                    # print(f"using ks test for {col}")
                     _, ks_pval = stats.kstest(dataset[col], "norm")
                     results[col] = {"ks": ks_pval}
             return pd.DataFrame(results)
@@ -250,7 +250,7 @@ class AutoStat:
                     stat_test = stats.median_test
                 elif dependence == "paired":
                     stat_test = stats.wilcoxon
-        print("stat test", stat_test)
+        # print("stat test", stat_test)
         return stat_test
 
     def make_stat_report(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, var_res:pd.DataFrame, output_dir:str, dependence:str) -> None:
@@ -270,7 +270,11 @@ class AutoStat:
             pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
         )
         for column in dataset.columns.drop(labels):
-            if all(norm_res[column] > 0.05) & var_res[column] > 0.05:
+            print(norm_res[column])
+            print(var_res.loc['variance_test'][column] )
+            print(all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05))
+            if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
+                print("normal distribution, equal variance")
                 if dependence == "independent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = stats.f_oneway(
                     *(
@@ -284,7 +288,20 @@ class AutoStat:
                         for group in dataset[labels].unique()
                     )
                         )[1]
-            if all(norm_res[column] < 0.05) & var_res[column] > 0.05:
+            if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+                print("normal distribution, unequal variance")
+                if dependence == "independent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = pg.welch_anova(
+                    dataset, dv=column, between=labels
+                )["p-unc"][0]
+                elif dependence == "dependent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = sm.stats.anova_lm(
+                    dataset, dv=column, between=labels
+                )["PR(>F)"][0]
+
+
+            if all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
+                print("not normal distribution, equal variance")
                 if dependence == "independent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = stats.kruskal(
                     *(
@@ -299,7 +316,8 @@ class AutoStat:
                         for group in dataset[labels].unique()
                     )
                         )[1]
-            if all(norm_res[column] < 0.05) & var_res[column] < 0.05:
+            if all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+                print("not normal distribution, unequal variance")
                 if dependence == "independent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = stats.median_test(
                     *(
@@ -314,7 +332,8 @@ class AutoStat:
                         for group in dataset[labels].unique()
                     )
                         )[1]
-
+            else:
+                print("something is wrong")
             sns.violinplot(data=dataset, x=labels, y=column)
             sns.violinplot(data=dataset, x=labels, y=column).set(
                     title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
