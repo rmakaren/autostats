@@ -122,7 +122,19 @@ class AutoStat:
             return "comparing two or more groups"
 
 
-    def normality_test(self, dataset, labels, output_dir) -> pd.DataFrame:
+    def normality_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> pd.DataFrame:
+        """ Here we check the data for normality by QQplot visualisation and statistical tests
+        per each feature we compare in the group. the output results for normality test are saved
+        in .csv file 
+
+        Args:
+            dataset (_type_): _description_
+            labels (_type_): _description_
+            output_dir (_type_): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
 
         def normality_tests(dataset):
             results = {}
@@ -139,7 +151,7 @@ class AutoStat:
 
         norm_res = dataset.groupby([labels]).apply(normality_tests)
 
-        # visualise results of normality tests with qqplots
+        # visualise results of normality tests with QQplots
         norm_dir = os.path.join(output_dir, "normality_test")
         os.makedirs(norm_dir, exist_ok=True)
 
@@ -161,43 +173,38 @@ class AutoStat:
         norm_res.to_csv(os.path.join(norm_dir, "norm_test.csv"))
         return norm_res
 
-    def variance_test(self, dataset:pd.DataFrame, labels, norm_res:pd.DataFrame) -> pd.DataFrame:
-        """_summary_
+    def variance_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame) -> pd.DataFrame:
+        """We perform test for equality of variances between groups 
+        (both on normally and non-normally distributed data) 
+        to choose an appropriate test for statistical analysis for group comparison. 
+        1) There are less than 50 datapoints and data is normally distributed
+            -> Levene's test for equality of variances
+        2) There are more than 50 datapoints and data is normally distributed
+            -> Bartlett's test test for equality of variances
+        3) Data is not normally distributed
+            -> "Brown-Forsythe test for variance homogeneity
+
 
         Args:
             dataset (pd.DataFrame): _description_
             labels (_type_): _description_
-            normality (_type_): _description_
+            norm_res (pd.DataFrame): _description_
 
         Returns:
             pd.DataFrame: _description_
         """
         
-        results = {}
-        for col in dataset.drop(labels, axis = 1).columns:
-            if pd.Series(normality[0] > 0.05).all():
-                if len(dataset) <= 50:
-                    print(f"using levene's test for {col}")
-                    _, levene_pval = stats.levene(dataset[col])
-                    results[col] = {"levene": levene_pval}
-                elif len(dataset) > 50:
-                    print(f"using bartlett's test for {col}")
-                    _, bartlett_pval = stats.bartlett(dataset[col])
-                    results[col] = {"barlett": bartlett_pval}
-                elif not pd.Series(normality[0] < 0.05).any():
-                    print("Brown-Forsythe test for variance homogeneity")
-
-
-            for col in dataset.drop(labels, axis = 1).columns:
-                if len(dataset)<= 50:
-                    print(f"using shapiro test for {col}")
-                    _, shapiro_pval = stats.shapiro(dataset[col])
-                    results[col] = {"shapiro": shapiro_pval}
-                elif len(dataset)>50:
-                    print(f"using ks test for {col}")
-                    _, ks_pval = stats.kstest(dataset[col], "norm")
-                    results[col] = {"ks": ks_pval}
-            return pd.DataFrame(results)
+        res = {}
+        for column in dataset.drop(labels, axis = 1):
+            if all(norm_res[column] > 0.05):
+                stat_test = stats.levene
+                center = "mean"
+            elif any(norm_res[column] < 0.05):
+                stat_test = stats.levene
+                center = "median"
+            res[f"{column}_levene_{center}"] = round(stat_test(*(dataset.loc[dataset[labels] == group, column] 
+                        for group in dataset[labels].unique()), center=center)[1], 7)
+        return pd.DataFrame.from_dict(res, orient='index', columns=["variance_test"])
 
 
     def define_stat_test(self, 
@@ -305,13 +312,13 @@ class AutoStat:
         if os.path.exists(output_dir) == False:
             os.makedirs(output_dir)
 
-        normality = self.normality_test(dataset, labels, output_dir)
-        variance = self.variance_test(dataset, labels, normality)
-        # print(variance)
-        s_test = self.define_stat_test(normality, variance, dependence = "independent")
+        norm_res = self.normality_test(dataset, labels, output_dir)
+        variance = self.variance_test(dataset, labels, norm_res)
+        print(variance)
+        s_test = self.define_stat_test(norm_res, variance, dependence = "independent")
         self.make_stat_report(dataset, labels, s_test, output_dir)
         print("--- %s seconds ---" % (time.time() - start_time))
-        return normality
+        return norm_res
 
 
 
