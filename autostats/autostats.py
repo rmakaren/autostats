@@ -124,7 +124,6 @@ class AutoStat:
 
     def normality_test(self, dataset, labels, output_dir) -> pd.DataFrame:
 
-
         def normality_tests(dataset):
             results = {}
             for col in dataset.drop(labels, axis = 1).columns:
@@ -162,7 +161,7 @@ class AutoStat:
         norm_res.to_csv(os.path.join(norm_dir, "norm_test.csv"))
         return norm_res
 
-    def variance_test(self, dataset:pd.DataFrame, labels, normality) -> pd.DataFrame:
+    def variance_test(self, dataset:pd.DataFrame, labels, norm_res:pd.DataFrame) -> pd.DataFrame:
         """_summary_
 
         Args:
@@ -173,9 +172,9 @@ class AutoStat:
         Returns:
             pd.DataFrame: _description_
         """
-
-        def variance_tests(dataset):
-            results = {}
+        
+        results = {}
+        for col in dataset.drop(labels, axis = 1).columns:
             if pd.Series(normality[0] > 0.05).all():
                 if len(dataset) <= 50:
                     print(f"using levene's test for {col}")
@@ -185,29 +184,20 @@ class AutoStat:
                     print(f"using bartlett's test for {col}")
                     _, bartlett_pval = stats.bartlett(dataset[col])
                     results[col] = {"barlett": bartlett_pval}
-            elif not pd.Series(normality[0] < 0.05).any():
-                if len(dataset) <= 50:
-                    print()
+                elif not pd.Series(normality[0] < 0.05).any():
+                    print("Brown-Forsythe test for variance homogeneity")
 
-                for col in dataset.drop(labels, axis = 1).columns:
-                    if len(dataset)<= 50:
-                        print(f"using shapiro test for {col}")
-                        _, shapiro_pval = stats.shapiro(dataset[col])
-                        results[col] = {"shapiro": shapiro_pval}
-                    elif len(dataset)>50:
-                        print(f"using ks test for {col}")
-                        _, ks_pval = stats.kstest(dataset[col], "norm")
-                        results[col] = {"ks": ks_pval}
+
+            for col in dataset.drop(labels, axis = 1).columns:
+                if len(dataset)<= 50:
+                    print(f"using shapiro test for {col}")
+                    _, shapiro_pval = stats.shapiro(dataset[col])
+                    results[col] = {"shapiro": shapiro_pval}
+                elif len(dataset)>50:
+                    print(f"using ks test for {col}")
+                    _, ks_pval = stats.kstest(dataset[col], "norm")
+                    results[col] = {"ks": ks_pval}
             return pd.DataFrame(results)
-
-
-        # variance_test = stats.bartlett if pd.Series(normality[0] > 0.05).all() else stats.levene
-
-        # groups = dataset.groupby(labels)
-
-        # return dataset.drop('species', axis=1)\
-        #     .apply(lambda x: variance_test(*[group[x.name] for name, group in groups]))\
-        #         .rename(index={0: 'statistic', 1: 'p-value'})
 
 
     def define_stat_test(self, 
