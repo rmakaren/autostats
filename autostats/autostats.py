@@ -209,50 +209,6 @@ class AutoStat:
         var_res.to_csv(path_or_buf=os.path.join(output_dir, "var_test.csv"))
         return var_res
 
-
-    def define_stat_test(self, 
-                         normality, 
-                         variance, 
-                         dependence:str = "independent", 
-                         p_value: float = 0.05) -> Callable:
-        """_summary_
-
-        Args:
-            normality (_type_): _description_
-            variance (_type_): _description_
-            dependence (str, optional): _description_. Defaults to "independent".
-            p_value (float, optional): _description_. Defaults to 0.05.
-
-        Returns:
-            Callable: _description_
-        """
-
-
-        if pd.Series(normality[0] > p_value).all():
-            if pd.Series(variance.iloc[1] > p_value).all():
-                if dependence == "independent":
-                    stat_test = stats.f_oneway
-                elif dependence == "paired":
-                    stat_test = AnovaRM 
-            elif pd.Series(variance.iloc[1] < p_value).any():
-                if dependence == "independent":
-                    stat_test = pg.welch_anova
-                elif dependence == "paired":
-                    stat_test = sm.stats.anova_lm
-        elif pd.Series(normality[0] < p_value).any():
-            if pd.Series(variance.iloc[1] > p_value).all():
-                if dependence == "independent":
-                    stat_test = stats.kruskal
-                elif dependence == "paired":
-                    stat_test = stats.friedmanchisquare
-            elif pd.Series(variance.iloc[1] < p_value).any():
-                if dependence == "independent":
-                    stat_test = stats.median_test
-                elif dependence == "paired":
-                    stat_test = stats.wilcoxon
-        # print("stat test", stat_test)
-        return stat_test
-
     def make_stat_report(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, var_res:pd.DataFrame, output_dir:str, dependence:str) -> None:
         """_summary_
 
@@ -270,9 +226,6 @@ class AutoStat:
             pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
         )
         for column in dataset.columns.drop(labels):
-            print(norm_res[column])
-            print(var_res.loc['variance_test'][column] )
-            print(all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05))
             if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
                 print("normal distribution, equal variance")
                 if dependence == "independent":
