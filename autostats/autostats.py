@@ -226,8 +226,15 @@ class AutoStat:
             pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
         )
         for column in dataset.columns.drop(labels):
+            # print(column)
+            # print(norm_res[column])
+            # print(var_res.loc['variance_test'][column])
+            # print(all(norm_res[column] < 0.05))
+            # print(var_res.loc['variance_test'][column] < 0.05)
+            # print(all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05))
+            # all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05)
             if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
-                print("normal distribution, equal variance")
+                print(column, "normal distribution, equal variance")
                 if dependence == "independent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = stats.f_oneway(
                     *(
@@ -235,14 +242,14 @@ class AutoStat:
                         for group in dataset[labels].unique()
                     )
                         )[1]
-                if dependence == "dependent":
+                elif dependence == "dependent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = AnovaRM(                    *(
                         dataset.loc[dataset[labels] == group, column]
                         for group in dataset[labels].unique()
                     )
                         )[1]
-            if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
-                print("normal distribution, unequal variance")
+            elif all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+                print(column, "normal distribution, unequal variance")
                 if dependence == "independent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = pg.welch_anova(
                     dataset, dv=column, between=labels
@@ -253,8 +260,8 @@ class AutoStat:
                 )["PR(>F)"][0]
 
 
-            if all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
-                print("not normal distribution, equal variance")
+            elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
+                print(column, "not normal distribution, equal variance")
                 if dependence == "independent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = stats.kruskal(
                     *(
@@ -269,8 +276,8 @@ class AutoStat:
                         for group in dataset[labels].unique()
                     )
                         )[1]
-            if all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
-                print("not normal distribution, unequal variance")
+            elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+                print(column, "not normal distribution, unequal variance")
                 if dependence == "independent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = stats.median_test(
                     *(
@@ -278,7 +285,7 @@ class AutoStat:
                         for group in dataset[labels].unique()
                     )
                         )[1]
-                if dependence == "dependent":
+                elif dependence == "dependent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = stats.wilcoxon(
                     *(
                         dataset.loc[dataset[labels] == group, column]
@@ -286,7 +293,7 @@ class AutoStat:
                     )
                         )[1]
             else:
-                print("something is wrong")
+                print(column, "something is wrong")
             sns.violinplot(data=dataset, x=labels, y=column)
             sns.violinplot(data=dataset, x=labels, y=column).set(
                     title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
