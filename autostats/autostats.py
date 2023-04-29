@@ -1,12 +1,20 @@
 import os
+import copy
 import pandas as pd
 from scipy import stats
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Callable
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import pingouin as pg
+from statsmodels.stats.anova import AnovaRM
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+
 import warnings
+import time
+
 
 warnings.filterwarnings("ignore")
 
@@ -26,12 +34,74 @@ from sklearn.datasets import load_iris
 
 class AutoStat:
     def __init__(
-        self, dataset: pd.DataFrame = None, labels: str = None, output_dir: str = None
+        self, 
+        dataset: pd.DataFrame = None, 
+        labels: str = None, 
+        output_dir: str = None, 
+        dependence:str = "independent"
     ) -> None:
+        """_summary_
+
+        Args:
+            dataset (pd.DataFrame, optional): _description_. Defaults to None.
+            labels (str, optional): _description_. Defaults to None.
+            output_dir (str, optional): _description_. Defaults to None.
+            dependence (str, optional): _description_. Defaults to "independent".
+        """
 
         self.dataset = dataset
         self.labels = labels
         self.output_dir = output_dir
+        self.dependence = dependence
+
+    def preprocessing(self, dataset:pd.DataFrame, labels:str) -> pd.DataFrame:
+        """Cleaning the dataframe from missing values, duplicates, and infinite values,
+        and dropping the labels column.
+
+        Args:
+            dataset (pd.DataFrame): _description_
+            labels (str): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+
+        # drop missing values, duplicates, and infinite values
+        dataset = dataset.dropna()
+        dataset = dataset.reset_index(drop=True)
+        dataset = dataset.drop_duplicates()
+        dataset = dataset.reset_index(drop=True)
+        dataset = dataset.replace([np.inf, -np.inf], np.nan)
+        dataset = dataset.dropna()
+        # dataset = dataset.drop(columns=[labels])
+        dataset = dataset.reset_index(drop=True)
+
+        # check if the dataset is empty
+        if dataset.empty:
+            print("The dataset is empty")
+            return None
+        
+        # check if the dataset has only one column
+        elif len(dataset.columns) == 1:
+            print("The dataset has only one column")
+            return None
+
+        # check if the dataset has only one row
+        elif len(dataset) == 1:
+            print("The dataset has only one row")
+            return None
+        
+        # check if the dataset has only one unique value
+        elif len(dataset[labels].unique()) == 1:
+            print("The dataset has only one unique value")
+            return None
+        
+        # check if labels are either strings or integers
+        elif not all(isinstance(x, (str, int)) for x in dataset[labels]):
+            print("Not categorical variables for groups: labels are neither strings nor integers")
+            return None
+
+        return dataset
 
     def define_analysis_type(self, dataset, labels) -> Union[str, None]:
         """Setting up statistical tests to check
@@ -47,106 +117,187 @@ class AutoStat:
             print("not enough samples, statistical tests are not applible")
             return None
 
-        elif len(dataset[labels].unique()) == 2 and len(dataset) >= 5:
-            print("comparing two groups")
-            return "comparing two groups"
-        elif len(dataset[labels].unique()) > 2 and len(dataset) >= 5:
-            print("comparing multiple groups")
-            return "comparing multiple groups"
+        elif len(dataset[labels].unique()) >= 2 and len(dataset) >= 5:
+            print("comparing two or more groups")
+            return "comparing two or more groups"
 
-    # def f_test(self, dataset, labels) -> float:
-    #     """an F-Test in Python
-    #     from https://www.geeksforgeeks.org/how-to-perform-an-f-test-in-python/
 
-    #     Args:
-    #         group1 (_type_): _description_
-    #         group2 (_type_): _description_
-
-    #     Returns:
-    #         _type_: _description_
-    #     """
-
-    #     x = np.array(dataset[labels] == dataset[labels].unique()[0])
-    #     y = np.array(dataset[labels] == dataset[labels].unique()[1])
-    #     f = np.var(dataset[labels] == dataset[labels].unique()[0],
-    #                 ddof=1)/np.var(dataset[labels] == dataset[labels].unique()[1], ddof=1)
-    #     nun = x.size-1
-    #     dun = y.size-1
-    #     p_value = 1-stats.f.cdf(f, nun, dun)
-    #     return f, p_value
-
-    def normality_test(self, dataset: pd.DataFrame, labels: str) -> pd.DataFrame:
-        """_summary_
+    def normality_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> pd.DataFrame:
+        """ Here we check the data for normality by QQplot visualisation and statistical tests
+        per each feature we compare in the group. the output results for normality test are saved
+        in .csv file 
 
         Args:
-            dataset (pd.DataFrame): _description_
-            labels (str): _description_
+            dataset (_type_): _description_
+            labels (_type_): _description_
+            output_dir (_type_): _description_
 
         Returns:
             pd.DataFrame: _description_
         """
-        norm_test = {}
+
+        def normality_tests(dataset):
+            results = {}
+            for col in dataset.drop(labels, axis = 1).columns:
+                if len(dataset)<= 50:
+                    # print(f"using shapiro test for {col}")
+                    _, shapiro_pval = stats.shapiro(dataset[col])
+                    results[col] = {"shapiro": shapiro_pval}
+                elif len(dataset)>50:
+                    # print(f"using ks test for {col}")
+                    _, ks_pval = stats.kstest(dataset[col], "norm")
+                    results[col] = {"ks": ks_pval}
+            return pd.DataFrame(results)
+
+        norm_res = dataset.groupby([labels]).apply(normality_tests)
+
+        # visualise results of normality tests with QQplots
+        norm_dir = os.path.join(output_dir, "normality_test")
+        os.makedirs(norm_dir, exist_ok=True)
+
         unique_observations = dataset[labels].unique()
         columns = dataset.columns.tolist()
         columns.remove(labels)
-
+        # calculate test statistics
         for observation in unique_observations:
             ix_a = dataset[labels] == observation
             for x in columns:
-                norm_test[observation + "_shapiro_" + x] = stats.shapiro(
-                    dataset[x][ix_a]
-                )[0]
-                norm_test[observation + "_kolmogorov_" + x] = stats.kstest(
-                    dataset[x][ix_a], stats.norm.cdf
-                )[0]
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                res = stats.probplot(dataset[x][ix_a], dist ='norm', plot=ax)
+                ax.set_title(f"qqplot_norm_{x}_{observation}")
+                plt.savefig(os.path.join(norm_dir, f"qqplot_norm_{x}_{observation}.png"))
+                plt.close()
 
-        return pd.DataFrame.from_dict(norm_test, orient="index")
+        # save the results of normality test
+        norm_res.to_csv(os.path.join(norm_dir, "norm_test.csv"))
+        return norm_res
 
-    def variance_bartlett(self, dataset: pd.DataFrame, labels: str) -> pd.DataFrame:
+    def variance_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, output_dir:str) -> pd.DataFrame:
+        """We perform test for equality of variances between groups 
+        (both on normally and non-normally distributed data) 
+        to choose an appropriate test for statistical analysis for group comparison. 
+        1) There are less than 50 datapoints and data is normally distributed
+            -> Levene's test for equality of variances
+        2) There are more than 50 datapoints and data is normally distributed
+            -> Bartlett's test test for equality of variances
+        3) Data is not normally distributed
+            -> "Brown-Forsythe test for variance homogeneity
+
+
+        Args:
+            dataset (pd.DataFrame): _description_
+            labels (_type_): _description_
+            norm_res (pd.DataFrame): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+        
+        var_res = {}
+        for column in dataset.drop(labels, axis = 1):
+            if all(norm_res[column] > 0.05):
+                stat_test = stats.levene
+                center = "mean"
+            elif any(norm_res[column] < 0.05):
+                stat_test = stats.levene
+                center = "median"
+            var_res[column] = round(stat_test(*(dataset.loc[dataset[labels] == group, column] 
+                        for group in dataset[labels].unique()), center=center)[1], 7)
+        
+        var_res = pd.DataFrame.from_dict(var_res, orient='index', columns=["variance_test"]).T
+        var_res.to_csv(path_or_buf=os.path.join(output_dir, "var_test.csv"))
+        return var_res
+
+    def make_stat_report(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, var_res:pd.DataFrame, output_dir:str, dependence:str) -> None:
         """_summary_
 
         Args:
             dataset (pd.DataFrame): _description_
-            labels (str): _description_
-            STAT_TYPE (str): _description_
+            labels (_type_): _description_
+            stat_test (Callable): _description_
+            output_dir (_type_): _description_
 
         Returns:
-            Dict: _description_
-        """
-        all_variance = {}
-        item_list = list(dataset[labels].unique())
-        for column in dataset.columns:
-            if column != labels:
-                variances_test = stats.bartlett(
-                    dataset[dataset[labels] == item_list[0]][column],
-                    dataset[dataset[labels] == item_list[1]][column],
-                )
-                all_variance[column] = variances_test[0]
-        return pd.DataFrame.from_dict(all_variance, orient="index")
-
-    def variance_levene(self, dataset: pd.DataFrame, labels: str) -> Dict:
-        """_summary_
-
-        Args:
-            dataset (pd.DataFrame): _description_
-            labels (str): _description_
-
-        Returns:
-            Dict: _description_
+            pd.DataFrame: _description_
         """
 
-        all_variance = {}
-        item_list = list(dataset[labels].unique())
-        for column in dataset.columns:
-            if column != labels:
-                variances_test = stats.levene(
-                    dataset[dataset[labels] == item_list[0]][column],
-                    dataset[dataset[labels] == item_list[1]][column],
-                )
-                all_variance[column] = variances_test[0]
-        return pd.DataFrame.from_dict(all_variance, orient="index")
+        describe_stats = round(
+            pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
+        )
+        for column in dataset.columns.drop(labels):
+            if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
+                print("normal distribution, equal variance")
+                if dependence == "independent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.f_oneway(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+                if dependence == "dependent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = AnovaRM(                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+            if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+                print("normal distribution, unequal variance")
+                if dependence == "independent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = pg.welch_anova(
+                    dataset, dv=column, between=labels
+                )["p-unc"][0]
+                elif dependence == "dependent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = sm.stats.anova_lm(
+                    dataset, dv=column, between=labels
+                )["PR(>F)"][0]
 
-    def auto_stat_test(self, dataset, labels, output_dir) -> pd.DataFrame:
+
+            if all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
+                print("not normal distribution, equal variance")
+                if dependence == "independent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.kruskal(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+                if dependence == "dependent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.friedmanchisquare(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+            if all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+                print("not normal distribution, unequal variance")
+                if dependence == "independent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.median_test(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+                if dependence == "dependent":
+                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.wilcoxon(
+                    *(
+                        dataset.loc[dataset[labels] == group, column]
+                        for group in dataset[labels].unique()
+                    )
+                        )[1]
+            else:
+                print("something is wrong")
+            sns.violinplot(data=dataset, x=labels, y=column)
+            sns.violinplot(data=dataset, x=labels, y=column).set(
+                    title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
+                )
+            plt.savefig(os.path.join(output_dir, f"compplot_{column}.png"))
+            plt.clf()
+
+        describe_stats.to_csv(os.path.join(output_dir, f"comp_stats.csv"))
+
+
+    def auto_stat_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> None:
         """_summary_
 
         Args:
@@ -157,99 +308,29 @@ class AutoStat:
             pd.DataFrame: _description_
         """
 
-        describe_stats = round(
-            pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
-        )
+        
+        start_time = time.time()
 
         STAT_TYPE = self.define_analysis_type(dataset, labels)
-        normality = self.normality_test(dataset, labels)
-        is_normal_distribution = pd.Series(normality[0] > 0.05).all()
-
-        if STAT_TYPE == "comparing two groups" and is_normal_distribution:
-            variance = self.variance_bartlett(dataset, labels)
-        elif STAT_TYPE == "comparing two groups" and not is_normal_distribution:
-            variance = self.variance_levene(dataset, labels)
-
-        item_list = list(dataset[labels].unique())
-        for column in dataset.columns:
-            if column not in labels:
-                if is_normal_distribution and STAT_TYPE == "comparing two groups":
-                    describe_stats.loc[column, "pvalue"] = round(
-                        stats.ttest_ind(
-                            dataset[dataset[labels] == item_list[0]][column],
-                            dataset[dataset[labels] == item_list[1]][column],
-                            equal_var=int(variance.loc[column]) > 0.05,
-                        )[1],
-                        3,
-                    )
-                    describe_stats.loc[
-                        (column, "mean"), "test_type"
-                    ] = "t-test independent"
-                if not is_normal_distribution and STAT_TYPE == "comparing two groups":
-                    describe_stats.loc[column, "pvalue"] = round(
-                        stats.mannwhitneyu(
-                            dataset[dataset[labels] == item_list[0]][column],
-                            dataset[dataset[labels] == item_list[1]][column],
-                        )[1],
-                        3,
-                    )
-                    describe_stats.loc[
-                        (column, "mean"), "test_type"
-                    ] = "Mann-Whitney U test"
-                if not is_normal_distribution and STAT_TYPE == "comparing two groups":
-                    describe_stats.loc[column, "pvalue"] = round(
-                        stats.mannwhitneyu(
-                            dataset[dataset[labels] == item_list[0]][column],
-                            dataset[dataset[labels] == item_list[1]][column],
-                        )[1],
-                        3,
-                    )
-                    describe_stats.loc[
-                        (column, "mean"), "test_type"
-                    ] = "Mann-Whitney U test"
-                if STAT_TYPE == "comparing multiple groups" and is_normal_distribution:
-                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.f_oneway(
-                        *(
-                            dataset.loc[dataset[labels] == group, column]
-                            for group in dataset[labels].unique()
-                        )
-                    )[1]
-                    describe_stats.loc[(column, "mean"), "test_type"] = "one-way Anova"
-                if (
-                    STAT_TYPE == "comparing multiple groups"
-                    and not is_normal_distribution
-                ):
-                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.kruskal(
-                        *(
-                            dataset.loc[dataset[labels] == group, column]
-                            for group in dataset[labels].unique()
-                        )
-                    )[1]
-                    describe_stats.loc[
-                        (column, "mean"), "test_type"
-                    ] = "Kruskal-Wallis H-test"
+        if STAT_TYPE == None:
+            return ("not enough samples, statistical tests are not applible")
+        
+        dataset = self.preprocessing(dataset, labels)
 
         if os.path.exists(output_dir) == False:
             os.makedirs(output_dir)
-        for column in dataset.columns:
-            if column not in labels:
-                sns.violinplot(data=dataset, x=labels, y=column)
-                sns.violinplot(data=dataset, x=labels, y=column).set(
-                    title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
-                )
-                plt.savefig(os.path.join(output_dir, f"comp_stat_{column}.png"))
-                plt.clf()
 
-        describe_stats.to_csv(os.path.join(output_dir, f"comp_stat.csv"))
-        return describe_stats, normality
+        norm_res = self.normality_test(dataset, labels, output_dir)
+        var_res = self.variance_test(dataset, labels, norm_res, output_dir)
+        self.make_stat_report(dataset, labels, norm_res, var_res, output_dir, dependence="independent")
+        print("--- %s seconds ---" % (time.time() - start_time))
+        return norm_res
 
 
-############################################""#
-# EVERYTHING BELOW HERE IS TO TEST THE CODE #
-#############################################
 
 if __name__ == "main":
 
+    print("starting")
     iris = load_iris()
     df_iris = pd.DataFrame(
         data=np.c_[iris["data"], iris["target"]],
@@ -262,3 +343,4 @@ if __name__ == "main":
 
     stat_test = AutoStat()
     stat_test.auto_stat_test(dataset=df_iris, labels="species")
+    print("done")
