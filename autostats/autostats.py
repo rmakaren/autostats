@@ -67,14 +67,17 @@ class AutoStat:
         """
 
         # drop missing values, duplicates, and infinite values
+        dataset = dataset.replace([np.inf, -np.inf], np.nan)
         dataset = dataset.dropna()
         dataset = dataset.reset_index(drop=True)
         dataset = dataset.drop_duplicates()
-        dataset = dataset.reset_index(drop=True)
-        dataset = dataset.replace([np.inf, -np.inf], np.nan)
-        dataset = dataset.dropna()
         # dataset = dataset.drop(columns=[labels])
         dataset = dataset.reset_index(drop=True)
+
+        # if after cleaning dataset is no more, return None
+        if type(dataset) == None:
+            print("The dataset is None, check the dataset")
+            return None
 
         # check if the dataset is empty
         if dataset.empty:
@@ -114,7 +117,7 @@ class AutoStat:
             Union[str, None]: _description_
         """
         if len(dataset[labels].unique()) == 1 or len(dataset) < 5:
-            print("not enough samples, statistical tests are not applible")
+            print("not enough samples, statistical tests are not appliable")
             return None
 
         elif len(dataset[labels].unique()) >= 2 and len(dataset) >= 5:
