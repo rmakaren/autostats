@@ -226,20 +226,13 @@ class AutoStat:
             pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
         )
         for column in dataset.columns.drop(labels):
-            # print(column)
-            # print(norm_res[column])
-            # print(var_res.loc['variance_test'][column])
-            # print(all(norm_res[column] < 0.05))
-            # print(var_res.loc['variance_test'][column] < 0.05)
-            # print(all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05))
-            # all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05)
             if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
                 print(column, "normal distribution, equal variance")
                 if dependence == "independent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = stats.f_oneway(
                     *(
                         dataset.loc[dataset[labels] == group, column]
-                        for group in dataset[labels].unique()
+                    for group in dataset[labels].unique()
                     )
                         )[1]
                 elif dependence == "dependent":
