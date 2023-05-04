@@ -15,7 +15,7 @@ from sklearn.datasets import load_iris
 class TestAutoTest:
 
     # we do remove NaN variables
-    def test_preprocessing(self, generate_df_NaN:Callable):
+    def test_preprocessing(self, generate_df_NaN:Callable, generate_df_duplicates:Callable):
         stat = AutoStat()
 
         # 1. common case
@@ -40,4 +40,16 @@ class TestAutoTest:
         assert dataset_no_NaN.isnull().sum().sum() == 0
         assert df_preproc3.isnull().sum().sum() == 0
 
+        # 4. no duplicates, should do nothing
+        dataset_no_dupl = generate_df_duplicates(num_rows=100, num_cols=10, num_duplicates=0)
+        df_preproc4 = stat.preprocessing(dataset = dataset_no_dupl,
+                                        labels = "labels")
+        
+        testing.assert_frame_equal(dataset_no_dupl, df_preproc4)
 
+        # 5. 1 duplicate, should remove duplicate
+        dataset_dupl = generate_df_duplicates(num_rows=100, num_cols=10, num_duplicates=1)
+        df_preproc5 = stat.preprocessing(dataset = dataset_dupl,
+                                        labels = "labels")
+        
+        assert len(dataset_dupl) == len(df_preproc5) + 1
