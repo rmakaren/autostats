@@ -94,14 +94,17 @@ class AutoStat:
         # check if the dataset has only one row
         assert len(dataset) != 1, "The dataset has only one row"
         
-        # check if the dataset has only one unique value
-        assert len(dataset[labels].unique()) != 1, "The dataset has only one unique dependent variable"
+        # check if the dataset has enough data for analysis one unique value
+        assert len(dataset[labels].unique()) != 1, "Not enough samples in dataset, statistical tests are not appliable"
+        assert len(dataset) >= 5, "Not enough samples in dataset, statistical tests are not appliable"
         
         # check if labels are either strings or integers
         assert all(isinstance(x, (str, int)) for x in dataset[labels]), "Not categorical variables for groups: labels are neither strings nor integers"
+
+        print("comparing two or more groups")
         return dataset
 
-    def define_analysis_type(self, dataset, labels) -> Union[str, None]:
+    def define_analysis_type(self, dataset:pd.DataFrame, labels:str) -> Union[str, None]:
         """Setting up statistical tests to check
 
         Args:
@@ -111,13 +114,7 @@ class AutoStat:
         Returns:
             Union[str, None]: _description_
         """
-        if len(dataset[labels].unique()) == 1 or len(dataset) < 5:
-            print("not enough samples, statistical tests are not appliable")
-            return None
-
-        elif len(dataset[labels].unique()) >= 2 and len(dataset) >= 5:
-            print("comparing two or more groups")
-            return "comparing two or more groups"
+        pass
 
 
     def normality_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> pd.DataFrame:
@@ -308,10 +305,6 @@ class AutoStat:
 
         
         start_time = time.time()
-
-        STAT_TYPE = self.define_analysis_type(dataset, labels)
-        if STAT_TYPE == None:
-            return ("not enough samples, statistical tests are not applible")
         
         dataset = self.preprocessing(dataset, labels)
 

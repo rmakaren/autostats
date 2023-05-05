@@ -104,7 +104,7 @@ class TestAutoTest:
         dataset_1_label = generate_df_labels_test(num_rows=100, num_cols=10, labels=["label1"])
         with pytest.raises(
             AssertionError,
-            match="The dataset has only one unique dependent variable",
+            match="Not enough samples in dataset, statistical tests are not appliable",
         ):
             df_one_label = stat.preprocessing(dataset = dataset_1_label, labels = "labels") 
 
