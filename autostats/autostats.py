@@ -74,36 +74,31 @@ class AutoStat:
         # dataset = dataset.drop(columns=[labels])
         dataset = dataset.reset_index(drop=True)
 
+                # drop missing values, duplicates, and infinite values
+        dataset = dataset.replace([np.inf, -np.inf], np.nan)
+        dataset = dataset.dropna()
+        dataset = dataset.reset_index(drop=True)
+        dataset = dataset.drop_duplicates()
+        # dataset = dataset.drop(columns=[labels])
+        dataset = dataset.reset_index(drop=True)
+
         # if after cleaning dataset is no more, return None
-        if type(dataset) == None:
-            print("The dataset is None, check the dataset")
-            return None
+        assert type(dataset) != None, "The dataset is None, check the dataset"
 
         # check if the dataset is empty
-        if dataset.empty:
-            print("The dataset is empty")
-            return None
+        assert dataset.empty != True, "The dataset is empty"
         
         # check if the dataset has only one column
-        elif len(dataset.columns) == 1:
-            print("The dataset has only one column")
-            return None
+        assert len(dataset.columns) != 1, "The dataset has only one column"
 
         # check if the dataset has only one row
-        elif len(dataset) == 1:
-            print("The dataset has only one row")
-            return None
+        assert len(dataset) != 1, "The dataset has only one row"
         
         # check if the dataset has only one unique value
-        elif len(dataset[labels].unique()) == 1:
-            print("The dataset has only one unique value")
-            return None
+        assert len(dataset[labels].unique()) != 1, "The dataset has only one unique dependent variable"
         
         # check if labels are either strings or integers
-        elif not all(isinstance(x, (str, int)) for x in dataset[labels]):
-            print("Not categorical variables for groups: labels are neither strings nor integers")
-            return None
-
+        assert all(isinstance(x, (str, int)) for x in dataset[labels]), "Not categorical variables for groups: labels are neither strings nor integers"
         return dataset
 
     def define_analysis_type(self, dataset, labels) -> Union[str, None]:

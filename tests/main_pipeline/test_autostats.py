@@ -15,7 +15,11 @@ from sklearn.datasets import load_iris
 class TestAutoTest:
 
     # we do remove NaN variables, duplicates, infinitive numbers
-    def test_preprocessing(self, generate_df_NaN:Callable, generate_df_dupl:Callable, generate_df_inf:Callable):
+    def test_preprocessing(self, 
+                           generate_df_NaN:Callable, 
+                           generate_df_dupl:Callable, 
+                           generate_df_inf:Callable,
+                           generate_df_labels_test:Callable):
         stat = AutoStat()
 
         # 1. common case
@@ -29,7 +33,12 @@ class TestAutoTest:
 
         # 2. if NaN in all rows, returns None
         dataset_NaN_all = generate_df_NaN(num_rows=100, num_cols=10, num_missing=100*10)
-        assert stat.preprocessing(dataset = dataset_NaN_all, labels = "labels") == None
+
+        with pytest.raises(
+            AssertionError,
+            match="The dataset is empty",
+        ):
+            NaN_all = stat.preprocessing(dataset = dataset_NaN_all, labels = "labels")
 
         # 3. no NaN, should do nothing
         dataset_no_NaN = generate_df_NaN(num_rows=100, num_cols=10, num_missing=0)
@@ -82,9 +91,47 @@ class TestAutoTest:
         # TODO: there is some error here, debug
         # assert any(df_preproc8.isin([np.inf, -np.inf])) == False
 
-        # 9. Dataset with one row or with 1 column
+        # # 9. Dataset with one row or with 1 column
         dataset_1row = generate_df_NaN(num_rows=1, num_cols=10, num_missing=0)
-        df_preproc9 = stat.preprocessing(dataset = dataset_1row, labels = "labels")
 
-        assert len(dataset_1row) == 1
-        assert df_preproc9 == None
+        with pytest.raises(
+            AssertionError,
+            match="The dataset has only one row",
+        ):
+            df_one_row = stat.preprocessing(dataset = dataset_1row, labels = "labels")
+        
+        # 10. dataset with one unique dependent variable
+        dataset_1_label = generate_df_labels_test(num_rows=100, num_cols=10, labels=["label1"])
+        with pytest.raises(
+            AssertionError,
+            match="The dataset has only one unique dependent variable",
+        ):
+            df_one_label = stat.preprocessing(dataset = dataset_1_label, labels = "labels") 
+
+        # 11. Dependent variable is not not categorical (integer or string)
+        dataset_labels_test1 = generate_df_labels_test(num_rows=100, num_cols=10, labels=[1.1, 1.3, 110.142])
+        with pytest.raises(
+            AssertionError,
+            match="Not categorical variables for groups: labels are neither strings nor integers",
+        ):
+            df_one_label = stat.preprocessing(dataset = dataset_labels_test1, labels = "labels") 
+
+
+        dataset_labels_test2 = generate_df_labels_test(num_rows=100, num_cols=10, labels=[1, 1, 110.142, "STR"])
+        with pytest.raises(
+            AssertionError,
+            match="Not categorical variables for groups: labels are neither strings nor integers",
+        ):
+            df_one_label = stat.preprocessing(dataset = dataset_labels_test2, labels = "labels") 
+
+        # 11. Dependent variable is integer
+        dataset_labels_test3 = generate_df_labels_test(num_rows=100, num_cols=10, labels=[0, 1, 2])
+        df_label_int = stat.preprocessing(dataset = dataset_labels_test3, labels = "labels")
+
+        testing.assert_frame_equal(dataset_labels_test3, df_label_int)
+
+        # 12. Dependent variable is string
+        dataset_labels_test4 = generate_df_labels_test(num_rows=100, num_cols=10, labels=["str1", "str2", "str3"])
+        df_label_str = stat.preprocessing(dataset = dataset_labels_test4, labels = "labels")
+
+        testing.assert_frame_equal(dataset_labels_test4, df_label_str)

@@ -74,3 +74,24 @@ def generate_df_inf() -> Callable[..., pd.DataFrame]:
 
         return df_inf
     return _generate_df_inf
+
+
+@pytest.fixture
+def generate_df_labels_test() -> Callable[..., pd.DataFrame]:
+    def _generate_df_labels_test(num_rows:int, num_cols:int, labels:list) -> pd.DataFrame:
+        """_summary_
+
+        Args:
+            num_rows (int): _description_
+            num_cols (int): _description_
+            num_missing (int): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+        data = np.random.uniform(low=1, high=100, size=(num_rows, num_cols))
+        df_one_label = pd.DataFrame(data)
+        df_one_label["labels"] = random.choices(labels, k=len(df_one_label))
+
+        return df_one_label
+    return _generate_df_labels_test
