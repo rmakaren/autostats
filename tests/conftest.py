@@ -95,3 +95,37 @@ def generate_df_labels_test() -> Callable[..., pd.DataFrame]:
 
         return df_one_label
     return _generate_df_labels_test
+
+
+
+
+
+@pytest.fixture
+def df_norm_labels():
+    def _df_norm_labels(n_obs_category1:int, n_obs_category2:int) -> pd.DataFrame:
+        """_summary_
+
+            Returns:
+                _type_: _description_
+            """
+            # Set the random seed for reproducibility
+        np.random.seed(42)
+
+            # Define the number of observations for each category
+        n_obs_category1 = n_obs_category1
+        n_obs_category2 = n_obs_category2
+
+            # Generate values from a normal distribution for category 1
+        category1 = np.random.normal(loc=0, scale=1, size=n_obs_category1)
+
+            # Generate values from a normal distribution for category 2
+        category2 = np.random.normal(loc=2, scale=1, size=n_obs_category2)
+
+            # Create a DataFrame with the generated values and categories
+        df = pd.DataFrame({
+            'value': np.concatenate([category1, category2]),
+            'labels': ['Category 1'] * n_obs_category1 + ['Category 2'] * n_obs_category2
+        })
+
+        return df
+    return _df_norm_labels

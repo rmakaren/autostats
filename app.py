@@ -3,7 +3,7 @@ import  os
 import pandas as pd
 import numpy as np
 
-dataset = pd.read_csv("/home/rostyslav/Projects/STAT_project/01-data/heart.csv", sep=",")
+dataset = pd.read_csv("/media/rostyslav/Toshiba/Projects/autostats/01-data/heart.csv", sep=",")
 
 stats = AutoStat()
 
