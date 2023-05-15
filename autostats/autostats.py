@@ -74,13 +74,17 @@ class AutoStat:
         # dataset = dataset.drop(columns=[labels])
         dataset = dataset.reset_index(drop=True)
 
-                # drop missing values, duplicates, and infinite values
+        # drop missing values, duplicates, and infinite values, time-series
         dataset = dataset.replace([np.inf, -np.inf], np.nan)
         dataset = dataset.dropna()
         dataset = dataset.reset_index(drop=True)
         dataset = dataset.drop_duplicates()
-        # dataset = dataset.drop(columns=[labels])
         dataset = dataset.reset_index(drop=True)
+        dataset = dataset.select_dtypes(exclude=['datetime64'])
+        dataset = dataset.reset_index(drop=True)
+
+        # we remove the columns that have less than 5 unique values except the labels column
+        dataset = dataset.loc[:, (dataset.nunique() >= 5) | (dataset.columns == labels)]
 
         # if after cleaning dataset is no more, return None
         assert type(dataset) != None, "The dataset is None, check the dataset"
@@ -92,7 +96,7 @@ class AutoStat:
         assert len(dataset.columns) != 1, "The dataset has only one column"
 
         # check if the dataset has only one row
-        assert len(dataset) != 1, "The dataset has only one row"
+        assert len(dataset.index) != 1, "The dataset has only one row"
         
         # check if the dataset has enough data for analysis one unique value
         assert len(dataset[labels].unique()) != 1, "Not enough samples in dataset, statistical tests are not appliable"
@@ -131,7 +135,7 @@ class AutoStat:
             pd.DataFrame: _description_
         """
 
-        def normality_tests(dataset):
+        def normality_tests(dataset:pd.DataFrame, labels=labels) -> pd.DataFrame:
             results = {}
             for col in dataset.columns.drop(labels):
                 if len(dataset)<= 50:
