@@ -133,14 +133,16 @@ class AutoStat:
 
         def normality_tests(dataset):
             results = {}
-            for col in dataset.drop(labels, axis = 1).columns:
+            for col in dataset.columns.drop(labels):
                 if len(dataset)<= 50:
+                    norm_test = stats.shapiro
                     # print(f"using shapiro test for {col}")
-                    _, shapiro_pval = stats.shapiro(dataset[col])
+                    _, shapiro_pval = norm_test(dataset[col])
                     results[col] = {"shapiro": shapiro_pval}
                 elif len(dataset)>50:
+                    norm_test = stats.kstest
                     # print(f"using ks test for {col}")
-                    _, ks_pval = stats.kstest(dataset[col], "norm")
+                    _, ks_pval = norm_test(dataset[col], "norm")
                     results[col] = {"ks": ks_pval}
             return pd.DataFrame(results)
 
@@ -190,7 +192,7 @@ class AutoStat:
         """
         
         var_res = {}
-        for column in dataset.drop(labels, axis = 1):
+        for column in dataset.columns.drop(labels):
             if all(norm_res[column] > 0.05):
                 stat_test = stats.levene
                 center = "mean"
