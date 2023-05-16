@@ -114,10 +114,10 @@ def generate_df_norm_labels():
         n_obs_category2 = n_obs_category2
 
             # Generate values from a normal distribution for category 1
-        category1 = np.random.normal(loc=0, scale=1, size=n_obs_category1)
+        category1 = np.random.normal(loc=100, scale=10, size=n_obs_category1)
 
             # Generate values from a normal distribution for category 2
-        category2 = np.random.normal(loc=2, scale=1, size=n_obs_category2)
+        category2 = np.random.normal(loc=1000, scale=200, size=n_obs_category2)
 
             # Create a DataFrame with the generated values and categories
         df = pd.DataFrame({

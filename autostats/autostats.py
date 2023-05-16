@@ -108,18 +108,6 @@ class AutoStat:
         print("comparing two or more groups")
         return dataset
 
-    def define_analysis_type(self, dataset:pd.DataFrame, labels:str) -> Union[str, None]:
-        """Setting up statistical tests to check
-
-        Args:
-            dataset (_type_): _description_
-            labels (_type_): _description_
-
-        Returns:
-            Union[str, None]: _description_
-        """
-        pass
-
 
     def normality_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> pd.DataFrame:
         """ Here we check the data for normality by QQplot visualisation and statistical tests
