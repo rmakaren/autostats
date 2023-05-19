@@ -77,14 +77,14 @@ class AutoStat:
         # drop missing values, duplicates, and infinite values, time-series
         dataset = dataset.replace([np.inf, -np.inf], np.nan)
         dataset = dataset.dropna()
-        dataset = dataset.reset_index(drop=True)
-        dataset = dataset.drop_duplicates()
-        dataset = dataset.reset_index(drop=True)
-        dataset = dataset.select_dtypes(exclude=['datetime64'])
+        # dataset = dataset.reset_index(drop=True)
+        # dataset = dataset.drop_duplicates()
+        # dataset = dataset.reset_index(drop=True)
+        # dataset = dataset.select_dtypes(exclude=['datetime64'])
         dataset = dataset.reset_index(drop=True)
 
         # we remove the columns that have less than 5 unique values except the labels column
-        dataset = dataset.loc[:, (dataset.nunique() >= 5) | (dataset.columns == labels)]
+        # dataset = dataset.loc[:, (dataset.nunique() >= 5) | (dataset.columns == labels)]
 
         # if after cleaning dataset is no more, return None
         assert type(dataset) != None, "The dataset is None, check the dataset"

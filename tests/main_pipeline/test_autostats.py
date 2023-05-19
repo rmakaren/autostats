@@ -257,7 +257,14 @@ class TestAutoTest:
 
 
 
-    def test_variance_test(self):
+    def test_variance_test(self, generate_df_norm_labels:Callable):
         """
-            Test with distribution having equal and non-equal variances"""
-        pass
+            Test with distribution having equal and non-equal variances
+        """
+        df_norm_var_eq = generate_df_norm_labels(mean_category1=100, 
+                                                 mean_category2=1000,
+                                                 scale_category1=10, 
+                                                 scale_category2=10)
+        
+        stat = AutoStat()
+        stat.variance_test(dataset=df_norm_var_eq, labels="labels", output_dir="output_dir")
