@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import random
 
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union, Literal
 
 
 @pytest.fixture
@@ -133,6 +133,20 @@ def generate_df_norm_labels():
         return df
     return _generate_df_norm_labels
 
+test_type = Literal["shapiro", "ks"]
 
-# @pytest.fixture
-# def generate_norm_res():
+
+@pytest.fixture
+def generate_norm_res():
+    def _generate_norm_res(test_type:str="shapiro") -> pd.DataFrame:
+        """_summary_
+        """
+
+        data = {
+        ('label1', test_type): [0.4595010578632355, 0.2715126574039459, 8.658606134304137e-07],
+        ('label2', test_type): [0.4647378921508789, 0.3379843533039093, 0.027278218418359756]
+        }
+    
+        df = pd.DataFrame(data, columns=pd.MultiIndex.from_tuples([('labels', '')]))
+        return df
+    return _generate_norm_res
