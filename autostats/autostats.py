@@ -67,43 +67,48 @@ class AutoStat:
         """
 
         # drop missing values, duplicates, and infinite values
+        dataset = dataset.replace([np.inf, -np.inf], np.nan)
+        dataset = dataset.dropna()
+        dataset = dataset.reset_index(drop=True)
+        dataset = dataset.drop_duplicates()
+        # dataset = dataset.drop(columns=[labels])
+        dataset = dataset.reset_index(drop=True)
+
+        # drop missing values, duplicates, and infinite values, time-series
+        dataset = dataset.replace([np.inf, -np.inf], np.nan)
         dataset = dataset.dropna()
         dataset = dataset.reset_index(drop=True)
         dataset = dataset.drop_duplicates()
         dataset = dataset.reset_index(drop=True)
-        dataset = dataset.replace([np.inf, -np.inf], np.nan)
-        dataset = dataset.dropna()
-        # dataset = dataset.drop(columns=[labels])
+        dataset = dataset.select_dtypes(exclude=['datetime64'])
         dataset = dataset.reset_index(drop=True)
 
+        # we remove the columns that have less than 5 unique values except the labels column
+        dataset = dataset.loc[:, (dataset.nunique() >= 5) | (dataset.columns == labels)]
+
+        # if after cleaning dataset is no more, return None
+        assert type(dataset) != None, "The dataset is None, check the dataset"
+
         # check if the dataset is empty
-        if dataset.empty:
-            print("The dataset is empty")
-            return None
+        assert dataset.empty != True, "The dataset is empty"
         
         # check if the dataset has only one column
-        elif len(dataset.columns) == 1:
-            print("The dataset has only one column")
-            return None
+        assert len(dataset.columns) != 1, "The dataset has only one column"
 
         # check if the dataset has only one row
-        elif len(dataset) == 1:
-            print("The dataset has only one row")
-            return None
+        assert len(dataset.index) != 1, "The dataset has only one row"
         
-        # check if the dataset has only one unique value
-        elif len(dataset[labels].unique()) == 1:
-            print("The dataset has only one unique value")
-            return None
+        # check if the dataset has enough data for analysis one unique value
+        assert len(dataset[labels].unique()) != 1, "Not enough samples in dataset, statistical tests are not appliable"
+        assert len(dataset) >= 5, "Not enough samples in dataset, statistical tests are not appliable"
         
         # check if labels are either strings or integers
-        elif not all(isinstance(x, (str, int)) for x in dataset[labels]):
-            print("Not categorical variables for groups: labels are neither strings nor integers")
-            return None
+        assert all(isinstance(x, (str, int)) for x in dataset[labels]), "Not categorical variables for groups: labels are neither strings nor integers"
 
+        print("comparing two or more groups")
         return dataset
 
-    def define_analysis_type(self, dataset, labels) -> Union[str, None]:
+    def define_analysis_type(self, dataset:pd.DataFrame, labels:str) -> Union[str, None]:
         """Setting up statistical tests to check
 
         Args:
@@ -113,13 +118,7 @@ class AutoStat:
         Returns:
             Union[str, None]: _description_
         """
-        if len(dataset[labels].unique()) == 1 or len(dataset) < 5:
-            print("not enough samples, statistical tests are not applible")
-            return None
-
-        elif len(dataset[labels].unique()) >= 2 and len(dataset) >= 5:
-            print("comparing two or more groups")
-            return "comparing two or more groups"
+        pass
 
 
     def normality_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> pd.DataFrame:
@@ -136,18 +135,19 @@ class AutoStat:
             pd.DataFrame: _description_
         """
 
-        def normality_tests(dataset):
+        def normality_tests(dataset:pd.DataFrame, labels=labels) -> pd.DataFrame:
             results = {}
-            for col in dataset.drop(labels, axis = 1).columns:
-                if len(dataset)<= 50:
-                    # print(f"using shapiro test for {col}")
-                    _, shapiro_pval = stats.shapiro(dataset[col])
-                    results[col] = {"shapiro": shapiro_pval}
-                elif len(dataset)>50:
-                    # print(f"using ks test for {col}")
-                    _, ks_pval = stats.kstest(dataset[col], "norm")
-                    results[col] = {"ks": ks_pval}
-            return pd.DataFrame(results)
+            for col in dataset:
+                if col != labels:
+                    if len(dataset)<= 50:
+                        # print(f"using shapiro test for {col}")
+                        _, shapiro_pval = stats.shapiro(dataset[col])
+                        results[col] = {"shapiro": shapiro_pval}
+                    elif len(dataset)>50:
+                        # print(f"using ks test for {col}")
+                        _, ks_pval = stats.kstest(dataset[col], "norm")
+                        results[col] = {"ks": ks_pval}
+                return pd.DataFrame(results)
 
         norm_res = dataset.groupby([labels]).apply(normality_tests)
 
@@ -226,20 +226,13 @@ class AutoStat:
             pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
         )
         for column in dataset.columns.drop(labels):
-            # print(column)
-            # print(norm_res[column])
-            # print(var_res.loc['variance_test'][column])
-            # print(all(norm_res[column] < 0.05))
-            # print(var_res.loc['variance_test'][column] < 0.05)
-            # print(all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05))
-            # all(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05)
             if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
                 print(column, "normal distribution, equal variance")
                 if dependence == "independent":
                     describe_stats.loc[(column, "mean"), "pvalue"] = stats.f_oneway(
                     *(
                         dataset.loc[dataset[labels] == group, column]
-                        for group in dataset[labels].unique()
+                    for group in dataset[labels].unique()
                     )
                         )[1]
                 elif dependence == "dependent":
@@ -317,10 +310,6 @@ class AutoStat:
 
         
         start_time = time.time()
-
-        STAT_TYPE = self.define_analysis_type(dataset, labels)
-        if STAT_TYPE == None:
-            return ("not enough samples, statistical tests are not applible")
         
         dataset = self.preprocessing(dataset, labels)
 
