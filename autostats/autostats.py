@@ -74,13 +74,17 @@ class AutoStat:
         # dataset = dataset.drop(columns=[labels])
         dataset = dataset.reset_index(drop=True)
 
-                # drop missing values, duplicates, and infinite values
+        # drop missing values, duplicates, and infinite values, time-series
         dataset = dataset.replace([np.inf, -np.inf], np.nan)
         dataset = dataset.dropna()
         dataset = dataset.reset_index(drop=True)
         dataset = dataset.drop_duplicates()
-        # dataset = dataset.drop(columns=[labels])
         dataset = dataset.reset_index(drop=True)
+        dataset = dataset.select_dtypes(exclude=['datetime64'])
+        dataset = dataset.reset_index(drop=True)
+
+        # we remove the columns that have less than 5 unique values except the labels column
+        dataset = dataset.loc[:, (dataset.nunique() >= 5) | (dataset.columns == labels)]
 
         # if after cleaning dataset is no more, return None
         assert type(dataset) != None, "The dataset is None, check the dataset"
@@ -92,32 +96,17 @@ class AutoStat:
         assert len(dataset.columns) != 1, "The dataset has only one column"
 
         # check if the dataset has only one row
-        assert len(dataset) != 1, "The dataset has only one row"
+        assert len(dataset.index) != 1, "The dataset has only one row"
         
-        # check if the dataset has only one unique value
-        assert len(dataset[labels].unique()) != 1, "The dataset has only one unique dependent variable"
+        # check if the dataset has enough data for analysis one unique value
+        assert len(dataset[labels].unique()) != 1, "Not enough samples in dataset, statistical tests are not appliable"
+        assert len(dataset) >= 5, "Not enough samples in dataset, statistical tests are not appliable"
         
         # check if labels are either strings or integers
         assert all(isinstance(x, (str, int)) for x in dataset[labels]), "Not categorical variables for groups: labels are neither strings nor integers"
+
+        print("comparing two or more groups")
         return dataset
-
-    def define_analysis_type(self, dataset, labels) -> Union[str, None]:
-        """Setting up statistical tests to check
-
-        Args:
-            dataset (_type_): _description_
-            labels (_type_): _description_
-
-        Returns:
-            Union[str, None]: _description_
-        """
-        if len(dataset[labels].unique()) == 1 or len(dataset) < 5:
-            print("not enough samples, statistical tests are not appliable")
-            return None
-
-        elif len(dataset[labels].unique()) >= 2 and len(dataset) >= 5:
-            print("comparing two or more groups")
-            return "comparing two or more groups"
 
 
     def normality_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> pd.DataFrame:
@@ -134,16 +123,18 @@ class AutoStat:
             pd.DataFrame: _description_
         """
 
-        def normality_tests(dataset):
+        def normality_tests(dataset:pd.DataFrame, labels=labels) -> pd.DataFrame:
             results = {}
-            for col in dataset.drop(labels, axis = 1).columns:
+            for col in dataset.columns.drop(labels):
                 if len(dataset)<= 50:
+                    norm_test = stats.shapiro
                     # print(f"using shapiro test for {col}")
-                    _, shapiro_pval = stats.shapiro(dataset[col])
+                    _, shapiro_pval = norm_test(dataset[col])
                     results[col] = {"shapiro": shapiro_pval}
                 elif len(dataset)>50:
+                    norm_test = stats.kstest
                     # print(f"using ks test for {col}")
-                    _, ks_pval = stats.kstest(dataset[col], "norm")
+                    _, ks_pval = norm_test(dataset[col], "norm")
                     results[col] = {"ks": ks_pval}
             return pd.DataFrame(results)
 
@@ -193,7 +184,7 @@ class AutoStat:
         """
         
         var_res = {}
-        for column in dataset.drop(labels, axis = 1):
+        for column in dataset.columns.drop(labels):
             if all(norm_res[column] > 0.05):
                 stat_test = stats.levene
                 center = "mean"
@@ -308,10 +299,6 @@ class AutoStat:
 
         
         start_time = time.time()
-
-        STAT_TYPE = self.define_analysis_type(dataset, labels)
-        if STAT_TYPE == None:
-            return ("not enough samples, statistical tests are not applible")
         
         dataset = self.preprocessing(dataset, labels)
 
