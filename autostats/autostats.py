@@ -162,6 +162,7 @@ class AutoStat:
         norm_res.to_csv(os.path.join(norm_dir, "norm_test.csv"))
         return norm_res
 
+
     def variance_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, output_dir:str) -> pd.DataFrame:
         """We perform test for equality of variances between groups 
         (both on normally and non-normally distributed data) 
@@ -198,7 +199,52 @@ class AutoStat:
         var_res.to_csv(path_or_buf=os.path.join(output_dir, "var_test.csv"))
         return var_res
 
-    def make_stat_report(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, var_res:pd.DataFrame, output_dir:str, dependence:str) -> None:
+    def choose_group_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, var_res:pd.DataFrame, dependence:str) -> function:
+        """Choose a group test on the results of normality and variance tests
+
+        Args:
+            dataset (pd.DataFrame): _description_
+            labels (str): _description_
+            norm_res (pd.DataFrame): _description_
+            var_res (pd.DataFrame): _description_
+            output_dir (str): _description_
+            dependence (str): _description_
+
+        Returns:
+            function: test function to perform pairwise comparison of groups
+        """
+
+        for column in dataset.columns.drop(labels):
+            if (norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
+                print(column, "normal distribution, equal variance")
+            #     if dependence == "independent":
+            #         group_test = stats.f_oneway
+            #     elif dependence == "dependent":
+            #         group_test = AnovaRM
+            # elif all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+            #     print(column, "normal distribution, unequal variance")
+            #     if dependence == "independent":
+            #         group_test = pg.welch_anova
+            #     elif dependence == "dependent":
+            #         group_test = sm.stats.anova_lm
+            # elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
+            #     print(column, "not normal distribution, equal variance")
+            #     if dependence == "independent":
+            #         group_test = stats.kruskal
+            #     if dependence == "dependent":
+            #         group_test = stats.friedmanchisquare
+            # elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+            #     print(column, "not normal distribution, unequal variance")
+            #     if dependence == "independent":
+            #         group_test = stats.median_test
+            #     elif dependence == "dependent":
+            #         group_test = stats.wilcoxon
+            else:
+                print(column, "something is wrong")
+        return group_test
+
+
+    def make_stat_report(self, dataset:pd.DataFrame, labels:str, var_res:pd.DataFrame, output_dir:str, dependence:str) -> None:
         """_summary_
 
         Args:
