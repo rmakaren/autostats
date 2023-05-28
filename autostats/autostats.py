@@ -199,7 +199,7 @@ class AutoStat:
         var_res.to_csv(path_or_buf=os.path.join(output_dir, "var_test.csv"))
         return var_res
 
-    def choose_group_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, var_res:pd.DataFrame, dependence:str) -> function:
+    def choose_group_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, var_res:pd.DataFrame) -> Callable:
         """Choose a group test on the results of normality and variance tests
 
         Args:
@@ -215,36 +215,36 @@ class AutoStat:
         """
 
         for column in dataset.columns.drop(labels):
-            if (norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
+            if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
                 print(column, "normal distribution, equal variance")
-            #     if dependence == "independent":
-            #         group_test = stats.f_oneway
-            #     elif dependence == "dependent":
-            #         group_test = AnovaRM
-            # elif all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
-            #     print(column, "normal distribution, unequal variance")
-            #     if dependence == "independent":
-            #         group_test = pg.welch_anova
-            #     elif dependence == "dependent":
-            #         group_test = sm.stats.anova_lm
-            # elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
-            #     print(column, "not normal distribution, equal variance")
-            #     if dependence == "independent":
-            #         group_test = stats.kruskal
-            #     if dependence == "dependent":
-            #         group_test = stats.friedmanchisquare
-            # elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
-            #     print(column, "not normal distribution, unequal variance")
-            #     if dependence == "independent":
-            #         group_test = stats.median_test
-            #     elif dependence == "dependent":
-            #         group_test = stats.wilcoxon
+                if self.dependence == "independent":
+                    group_test = stats.f_oneway
+                elif self.dependence == "dependent":
+                    group_test = AnovaRM
+            elif all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+                print(column, "normal distribution, unequal variance")
+                if self.dependence == "independent":
+                    group_test = pg.welch_anova
+                elif self.dependence == "dependent":
+                    group_test = sm.stats.anova_lm
+            elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
+                print(column, "not normal distribution, equal variance")
+                if self.dependence == "independent":
+                    group_test = stats.kruskal
+                if self.dependence == "dependent":
+                    group_test = stats.friedmanchisquare
+            elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
+                print(column, "not normal distribution, unequal variance")
+                if self.dependence == "independent":
+                    group_test = stats.median_test
+                elif self.dependence == "dependent":
+                    group_test = stats.wilcoxon
             else:
                 print(column, "something is wrong")
         return group_test
 
 
-    def make_stat_report(self, dataset:pd.DataFrame, labels:str, var_res:pd.DataFrame, output_dir:str, dependence:str) -> None:
+    def make_stat_report(self, group_test:Callable, dataset:pd.DataFrame, labels:str, output_dir:str) -> None:
         """_summary_
 
         Args:
@@ -261,65 +261,26 @@ class AutoStat:
             pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
         )
         for column in dataset.columns.drop(labels):
-            if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
-                print(column, "normal distribution, equal variance")
-                if dependence == "independent":
-                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.f_oneway(
+            if group_test in [stats.f_oneway, 
+                              stats.kruskal, 
+                              stats.friedmanchisquare, 
+                              stats.median_test, 
+                              stats.wilcoxon,
+                              AnovaRM]:
+                describe_stats.loc[(column, "mean"), "pvalue"] = group_test(
                     *(
-                        dataset.loc[dataset[labels] == group, column]
+                    dataset.loc[dataset[labels] == group, column]
                     for group in dataset[labels].unique()
                     )
-                        )[1]
-                elif dependence == "dependent":
-                    describe_stats.loc[(column, "mean"), "pvalue"] = AnovaRM(                    *(
-                        dataset.loc[dataset[labels] == group, column]
-                        for group in dataset[labels].unique()
-                    )
-                        )[1]
-            elif all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
-                print(column, "normal distribution, unequal variance")
-                if dependence == "independent":
-                    describe_stats.loc[(column, "mean"), "pvalue"] = pg.welch_anova(
+                    )[1]
+            elif group_test in [pg.welch_anova]:
+                describe_stats.loc[(column, "mean"), "pvalue"] = group_test(
+                    dataset, dv=column, between=labels, detailed=True
+                ).loc[labels, "p-unc"]
+            elif group_test in [sm.stats.anova_lm]:
+                describe_stats.loc[(column, "mean"), "pvalue"] = sm.stats.anova_lm(
                     dataset, dv=column, between=labels
-                )["p-unc"][0]
-                elif dependence == "dependent":
-                    describe_stats.loc[(column, "mean"), "pvalue"] = sm.stats.anova_lm(
-                    dataset, dv=column, between=labels
-                )["PR(>F)"][0]
-
-
-            elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
-                print(column, "not normal distribution, equal variance")
-                if dependence == "independent":
-                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.kruskal(
-                    *(
-                        dataset.loc[dataset[labels] == group, column]
-                        for group in dataset[labels].unique()
-                    )
-                        )[1]
-                if dependence == "dependent":
-                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.friedmanchisquare(
-                    *(
-                        dataset.loc[dataset[labels] == group, column]
-                        for group in dataset[labels].unique()
-                    )
-                        )[1]
-            elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
-                print(column, "not normal distribution, unequal variance")
-                if dependence == "independent":
-                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.median_test(
-                    *(
-                        dataset.loc[dataset[labels] == group, column]
-                        for group in dataset[labels].unique()
-                    )
-                        )[1]
-                elif dependence == "dependent":
-                    describe_stats.loc[(column, "mean"), "pvalue"] = stats.wilcoxon(
-                    *(
-                        dataset.loc[dataset[labels] == group, column]
-                        for group in dataset[labels].unique()
-                    )
-                        )[1]
+                    )["PR(>F)"][0]
             else:
                 print(column, "something is wrong")
             sns.violinplot(data=dataset, x=labels, y=column)
@@ -353,7 +314,8 @@ class AutoStat:
 
         norm_res = self.normality_test(dataset, labels, output_dir)
         var_res = self.variance_test(dataset, labels, norm_res, output_dir)
-        self.make_stat_report(dataset, labels, norm_res, var_res, output_dir, dependence="independent")
+        group_test = self.choose_group_test(dataset, labels, norm_res, var_res)
+        self.make_stat_report(group_test=group_test, dataset=dataset, labels = "species", output_dir=output_dir)
         print("--- %s seconds ---" % (time.time() - start_time))
         return norm_res
 
