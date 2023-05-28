@@ -283,7 +283,9 @@ class AutoStat:
                     )["PR(>F)"][0]
             else:
                 print(column, "something is wrong")
+            print(column, group_test)
             sns.violinplot(data=dataset, x=labels, y=column)
+            sns.swarmplot(x = labels, y =column, data = dataset,color= "k", alpha = 0.75, size = 4.5)
             sns.violinplot(data=dataset, x=labels, y=column).set(
                     title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
                 )
