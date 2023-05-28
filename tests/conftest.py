@@ -3,13 +3,14 @@ import pandas as pd
 import numpy as np
 import random
 
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union, Literal
 
 
 @pytest.fixture
 def generate_df_NaN() -> Callable[..., pd.DataFrame]:
     def _generate_df_NaN(num_rows:int, num_cols:int, num_missing:int) -> pd.DataFrame:
-        """_summary_
+        """ creates a dataframe with random values for given number of rows and columns and including
+        given number of missing values
 
         Args:
             num_rows (int): _description_
@@ -30,7 +31,8 @@ def generate_df_NaN() -> Callable[..., pd.DataFrame]:
 @pytest.fixture
 def generate_df_dupl() -> Callable[..., pd.DataFrame]:
     def _generate_df_dupl(num_rows:int, num_cols:int, frac_dupl:float) -> pd.DataFrame:
-        """_summary_
+        """ creates a dataframe with random values for given number of rows and columns and 
+        including ducplicates rows with given fraction
 
         Args:
             num_rows (int): _description_
@@ -53,7 +55,7 @@ def generate_df_dupl() -> Callable[..., pd.DataFrame]:
 @pytest.fixture
 def generate_df_inf() -> Callable[..., pd.DataFrame]:
     def _generate_df_inf(num_rows:int, num_cols:int, num_inf:float) -> pd.DataFrame:
-        """_summary_
+        """ creates a dataframe with random values for given number of rows and columns and including infinities values
 
         Args:
             num_rows (int): _description_
@@ -79,7 +81,7 @@ def generate_df_inf() -> Callable[..., pd.DataFrame]:
 @pytest.fixture
 def generate_df_labels_test() -> Callable[..., pd.DataFrame]:
     def _generate_df_labels_test(num_rows:int, num_cols:int, labels:list) -> pd.DataFrame:
-        """_summary_
+        """generates dataframe with random values and given number of labels (to create groups)
 
         Args:
             num_rows (int): _description_
@@ -98,28 +100,29 @@ def generate_df_labels_test() -> Callable[..., pd.DataFrame]:
 
 
 
-
-
 @pytest.fixture
-def df_norm_labels():
-    def _df_norm_labels(n_obs_category1:int, n_obs_category2:int) -> pd.DataFrame:
+def generate_df_norm_labels():
+    def _generate_df_norm_labels(mean_category1:int=100,
+                                 mean_category2:int=1000,
+                                 scale_category1:int=10, 
+                                 scale_category2:int=200,
+                                 n_obs_category1:int=30, 
+                                 n_obs_category2:int=50) -> pd.DataFrame:
         """_summary_
 
             Returns:
                 _type_: _description_
             """
-            # Set the random seed for reproducibility
-        np.random.seed(42)
 
             # Define the number of observations for each category
         n_obs_category1 = n_obs_category1
         n_obs_category2 = n_obs_category2
 
             # Generate values from a normal distribution for category 1
-        category1 = np.random.normal(loc=0, scale=1, size=n_obs_category1)
+        category1 = np.random.normal(loc=mean_category1, scale=scale_category1, size=n_obs_category1)
 
             # Generate values from a normal distribution for category 2
-        category2 = np.random.normal(loc=2, scale=1, size=n_obs_category2)
+        category2 = np.random.normal(loc=mean_category2, scale=scale_category2, size=n_obs_category2)
 
             # Create a DataFrame with the generated values and categories
         df = pd.DataFrame({
@@ -128,4 +131,22 @@ def df_norm_labels():
         })
 
         return df
-    return _df_norm_labels
+    return _generate_df_norm_labels
+
+test_type = Literal["shapiro", "ks"]
+
+
+@pytest.fixture
+def generate_norm_res():
+    def _generate_norm_res(test_type:str="shapiro") -> pd.DataFrame:
+        """_summary_
+        """
+
+        data = {
+        ('label1', test_type): [0.4595010578632355, 0.2715126574039459, 8.658606134304137e-07],
+        ('label2', test_type): [0.4647378921508789, 0.3379843533039093, 0.027278218418359756]
+        }
+    
+        df = pd.DataFrame(data, columns=pd.MultiIndex.from_tuples([('labels', '')]))
+        return df
+    return _generate_norm_res

@@ -1,5 +1,6 @@
 
 import os
+import shutil
 import numpy as np
 import pandas as pd
 from pandas import testing
@@ -19,8 +20,7 @@ class TestAutoTest:
                            generate_df_NaN:Callable, 
                            generate_df_dupl:Callable, 
                            generate_df_inf:Callable,
-                           generate_df_labels_test:Callable,
-                           df_norm_labels:Callable):
+                           generate_df_labels_test:Callable):
         stat = AutoStat()
 
         # 1. common case
@@ -139,16 +139,135 @@ class TestAutoTest:
 
         testing.assert_frame_equal(dataset_labels_test4, df_label_str)
 
-    def test_normality_test(self, df_norm_labels):
+    def test_normality_test(self, generate_df_norm_labels:Callable, generate_df_NaN:Callable):
         """
         Test with generated normal and non-normal distributed data"""
 
-        # 1. Normal distribution < 50 observations
-        pass
+        # 1. Normal distribution < 50 observations for both categories
+        stat = AutoStat()
+        df_norm1 = generate_df_norm_labels(n_obs_category1 = 40, n_obs_category2 = 30)
+
+        df_norm_tested1 = stat.normality_test(dataset=df_norm1, labels="labels", output_dir="output_dir")
+        
+        assert df_norm_tested1.index[0][1] == "shapiro"
+        assert df_norm_tested1.index[1][1] == "shapiro"
+
+        assert df_norm_tested1.index[0][1] != "ks"
+        assert df_norm_tested1.index[1][1] != "ks"
+
+        assert all(df_norm_tested1) > 0.05
+
+        assert os.path.exists(os.path.join("output_dir/normality_test", "norm_test.csv"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_value_Category 1.png"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_value_Category 2.png"))
+
+        shutil.rmtree("output_dir")
+   
+        # 2. Normal distribution < 50 observations for the first one and > for the second one
+        df_norm2 = generate_df_norm_labels(n_obs_category1 = 40, n_obs_category2 = 60)
+
+        df_norm_tested2 = stat.normality_test(dataset=df_norm2, labels="labels", output_dir="output_dir")
+
+        assert df_norm_tested2.index[0][1] == "shapiro"
+        assert df_norm_tested2.index[1][1] == "ks"
+
+        assert df_norm_tested2.index[0][1] != "ks"
+        assert df_norm_tested2.index[1][1] != "shapiro"
+
+        assert all(df_norm_tested2) > 0.05
+
+        assert os.path.exists(os.path.join("output_dir/normality_test", "norm_test.csv"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_value_Category 1.png"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_value_Category 2.png"))
+
+        shutil.rmtree("output_dir")
+
+        # 3. Normal distribution and exactly 50 observations
+        df_norm3 = generate_df_norm_labels(n_obs_category1 = 50, n_obs_category2 = 50)
+
+        df_norm_tested3 = stat.normality_test(dataset=df_norm3, labels="labels", output_dir="output_dir")
+
+        assert df_norm_tested3.index[0][1] == "shapiro"
+        assert df_norm_tested3.index[1][1] == "shapiro"
+
+        assert df_norm_tested3.index[0][1] != "ks"
+        assert df_norm_tested3.index[1][1] != "ks"
+
+        assert all(df_norm_tested3) > 0.05
+
+        assert os.path.exists(os.path.join("output_dir/normality_test", "norm_test.csv"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_value_Category 1.png"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_value_Category 2.png"))
+
+        shutil.rmtree("output_dir")
+
+        # 4. generate non-normal distribution, common case
+        df_uniform1 = generate_df_NaN(num_rows = 50, num_cols = 2, num_missing=0)
+        df_norm_tested4 = stat.normality_test(dataset=df_uniform1, labels="labels", output_dir="output_dir")
+
+        assert df_norm_tested4.index[0][1] == "shapiro"
+        assert df_norm_tested4.index[1][1] == "shapiro"
+
+        assert all(df_norm_tested4) < 0.05
+
+        assert os.path.exists(os.path.join("output_dir/normality_test", "norm_test.csv"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_0_label1.png"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_0_label2.png"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_1_label1.png"))
+        assert os.path.exists(os.path.join("output_dir/normality_test", "qqplot_norm_1_label2.png"))
+
+        shutil.rmtree("output_dir")
+
+        # 5. generate non-normal distribution with small samples
+        df_uniform2 = generate_df_NaN(num_rows = 10, num_cols = 1, num_missing=0)
+        df_norm_tested5 = stat.normality_test(dataset=df_uniform2, labels="labels", output_dir="output_dir")
+
+        assert df_norm_tested5.index[0][1] == "shapiro"
+        assert df_norm_tested5.index[1][1] == "shapiro"
+
+        assert all(df_norm_tested5) < 0.05
+
+        shutil.rmtree("output_dir")
+
+        # 6. generate non-normal distribution very big samples
+        df_uniform3 = generate_df_NaN(num_rows = 1000, num_cols = 1, num_missing=0)
+        df_norm_tested6 = stat.normality_test(dataset=df_uniform3, labels="labels", output_dir="output_dir")
+
+        assert df_norm_tested6.index[0][1] == "ks"
+        assert df_norm_tested6.index[1][1] == "ks"
+
+        assert all(df_norm_tested6) < 0.05
+
+        shutil.rmtree("output_dir")
+
+        # 7. generate normal distribution very big samples
+        df_norm7 = generate_df_norm_labels(n_obs_category1 = 50000, n_obs_category2 = 50000)
+        df_norm_tested7 = stat.normality_test(dataset=df_norm7, labels="labels", output_dir="output_dir")
+
+        assert df_norm_tested7.index[0][1] == "ks"
+        assert df_norm_tested7.index[1][1] == "ks"
+
+        # a little smaller sample
+        assert all(df_norm_tested7) > 0.05
+
+        df_norm8 = generate_df_norm_labels(n_obs_category1 = 300, n_obs_category2 = 300)
+        df_norm_tested8 = stat.normality_test(dataset=df_norm8, labels="labels", output_dir="output_dir")
+
+        assert all(df_norm_tested8) > 0.05
 
 
 
-    def test_variance_test(self):
+    def test_variance_test(self, generate_df_norm_labels:Callable, generate_norm_res:Callable):
         """
-            Test with distribution having equal and non-equal variances"""
+            Test with distribution having equal and non-equal variances
+        """
+        # df_norm_var_eq = generate_df_norm_labels(mean_category1=100, 
+        #                                          mean_category2=1000,
+        #                                          scale_category1=10, 
+        #                                          scale_category2=10)
+        
+        # norm_res = generate_norm_res(test_type="shapiro")
+        
+        # stat = AutoStat()
+        # stat.variance_test(dataset=df_norm_var_eq, labels="labels", output_dir="output_dir", norm_res=norm_res)
         pass
