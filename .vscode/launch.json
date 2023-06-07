@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Python: app",
             "type": "python",
@@ -13,10 +14,10 @@
             "justMyCode": true
         },
         {
-            "name": "test autostats",
+            "name": "debugging",
             "type": "python",
             "request": "launch",
-            "program": "dev_snippet.py",
+            "program": "dev_snippet_copy.py",
             "console": "integratedTerminal",
             "justMyCode": true
         }

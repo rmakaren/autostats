@@ -219,25 +219,25 @@ class AutoStat:
                 print(column, "normal distribution, equal variance")
                 if self.dependence == "independent":
                     group_test[column] = stats.f_oneway
-                elif self.dependence == "dependent":
+                elif self.dependence == "paired":
                     group_test[column] = AnovaRM
             elif all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
                 print(column, "normal distribution, unequal variance")
                 if self.dependence == "independent":
                     group_test[column] = pg.welch_anova
-                elif self.dependence == "dependent":
+                elif self.dependence == "paired":
                     group_test[column] =  sm.stats.anova_lm
             elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
                 print(column, "not normal distribution, equal variance")
                 if self.dependence == "independent":
                     group_test[column] = stats.kruskal
-                if self.dependence == "dependent":
+                if self.dependence == "paired":
                     group_test[column] = stats.friedmanchisquare
             elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
                 print(column, "not normal distribution, unequal variance")
                 if self.dependence == "independent":
                     group_test[column] = stats.median_test
-                elif self.dependence == "dependent":
+                elif self.dependence == "paired":
                     group_test[column] = stats.wilcoxon
             else:
                 print(column, "something is wrong")
