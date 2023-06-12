@@ -108,7 +108,7 @@ class GroupComparisonAnalyzer:
 
         results_df = pd.DataFrame(results)
         pivot_df = results_df.pivot_table(values='p-value', index=['Group 1', 'Group 2'], columns='Feature')
-
+        print(pivot_df)
         return pivot_df
 
     def perform_variance_test(self, group1_data, group2_data, center:str) -> pd.DataFrame:
@@ -157,6 +157,7 @@ class GroupComparisonAnalyzer:
 
         results_df = pd.DataFrame(results)
         pivot_df = results_df.pivot_table(values='p-value', index=['Group 1', 'Group 2'], columns='Feature')
+        print(pivot_df)
         return pivot_df
 
 
@@ -187,6 +188,7 @@ class GroupComparisonAnalyzer:
 
                 group1_data = self.dataset[self.dataset[self.labels] == group1][feature]
                 group2_data = self.dataset[self.dataset[self.labels] == group2][feature]
+                print(group1_data, group2_data)
                 
                 if norm_value == 1 and var_value < 0.05 and dependence == "independent":
                     stat_test = stats.f_oneway(group1_data, group2_data)[1]
@@ -216,7 +218,9 @@ class GroupComparisonAnalyzer:
                 results.append(result)
 
         results_df = pd.DataFrame(results)
+        print(results_df)
         pivot_df = results_df.pivot_table(values='stat-test', index=['Group 1', 'Group 2'], columns='Feature')
+        print(pivot_df)
         return pivot_df
     
     def run_group_comparison(self, dependence="independent") -> pd.DataFrame:
