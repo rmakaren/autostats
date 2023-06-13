@@ -245,3 +245,4 @@ if __name__ == "__main__":
     norm_test_result = analyzer.group_comparison_norm()
     var_test_result = analyzer.group_comparison_var(norm_test=norm_test_result)
     group_test = analyzer.choose_stat_test(norm_test=norm_test_result, var_test=var_test_result)
+    
