@@ -62,6 +62,8 @@ class GroupComparisonAnalyzer:
         """
         groups = self.dataset[self.labels].unique()
         combinations = [(groups[i], groups[j]) for i in range(len(groups)) for j in range(i+1, len(groups))]
+        # print(combinations)
+        assert len(combinations) != 0, "no group combinations were created"
         return combinations
 
     def perform_normality_test(self, data:pd.Series) -> float:
@@ -84,7 +86,7 @@ class GroupComparisonAnalyzer:
         and checks if all groups for given feature pass the test for normality
 
         Returns:
-            _type_: a pivot table, pandas dataframe to 
+            _type_: a pivot table, pandas dataframe with either 1 or 2 values. 1 - if 
         """
         results = []
 
@@ -95,20 +97,20 @@ class GroupComparisonAnalyzer:
                 group1_data = self.dataset[self.dataset[self.labels] == group1][feature]
                 group2_data = self.dataset[self.dataset[self.labels] == group2][feature]
 
-                p_value = any(pd.Series([self.perform_normality_test(group1_data),
-                                         self.perform_normality_test(group2_data)]) < 0.05)
+                p_value = all(pd.Series([self.perform_normality_test(group1_data),
+                                         self.perform_normality_test(group2_data)]) > 0.05)
 
                 result = {
                     'Group 1': group1,
                     'Group 2': group2,
                     'Feature': feature,
-                    'p-value': p_value
+                    'both are norm dist': p_value
                 }
                 results.append(result)
 
         results_df = pd.DataFrame(results)
-        pivot_df = results_df.pivot_table(values='p-value', index=['Group 1', 'Group 2'], columns='Feature')
-        print(pivot_df)
+        pivot_df = results_df.pivot_table(values='both are norm dist', index=['Group 1', 'Group 2'], columns='Feature')
+        print("norm_test", pivot_df)
         return pivot_df
 
     def perform_variance_test(self, group1_data, group2_data, center:str) -> pd.DataFrame:
