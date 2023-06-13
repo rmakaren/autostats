@@ -26,25 +26,25 @@
 
 # THIS IS FAILED EXAMPLE
 
-import  os
-import pandas as pd
-import numpy as np
+# import  os
+# import pandas as pd
+# import numpy as np
 
 
-from autostats.preprocessing import Preprocess
-from autostats.autostats import GroupComparisonAnalyzer
+# from autostats.preprocessing import Preprocess
+# from autostats.autostats import GroupComparisonAnalyzer
 
 
-dataset = pd.read_csv("/media/rostyslav/Toshiba/Projects/autostats/01-data/heart.csv", sep=",")
+# dataset = pd.read_csv("/media/rostyslav/Toshiba/Projects/autostats/01-data/heart.csv", sep=",")
 
-preprocess = Preprocess(dataset=dataset, labels="output")
+# preprocess = Preprocess(dataset=dataset, labels="output")
 
 
-dataset_prep = preprocess.preprocessing(dataset=dataset, labels="output")
-dataset_prep2 = dataset_prep.drop("caa", axis=1)
-# dataset_prep2.remove_unused_categories()
-stats = GroupComparisonAnalyzer(dataset=dataset_prep2, labels="output")
-res = stats.run_group_comparison()
+# dataset_prep = preprocess.preprocessing(dataset=dataset, labels="output")
+# dataset_prep2 = dataset_prep.drop("caa", axis=1)
+# # dataset_prep2.remove_unused_categories()
+# stats = GroupComparisonAnalyzer(dataset=dataset_prep2, labels="output")
+# res = stats.run_group_comparison()
 # %%
 
 # wine dataset

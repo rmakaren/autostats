@@ -195,7 +195,7 @@ class GroupComparisonAnalyzer:
                 elif norm_value == 1 and var_value < 0.05 and dependence == "paired":
                     stat_test = sm.stats.anova.AnovaRM(self.dataset, feature, subject=self.labels, within=[group1, group2]).fit()
                 elif norm_value == 1 and var_value >= 0.05 and dependence == "independent":
-                    stat_test = pg.welch_anova(self.dataset, dv=feature, between=self.labels)
+                    stat_test = pg.welch_anova(self.dataset, dv=feature, between=self.labels).loc[0, 'p-unc']
                 elif norm_value == 1 and var_value >= 0.05 and dependence == "paired":
                     stat_test = sm.stats.anova_lm(sm.stats.OLS(self.dataset[group1][feature], sm.tools.add_constant(self.dataset[group2][feature]))).F[0]
                 elif norm_value == 0 and var_value < 0.05 and dependence == "independent":
