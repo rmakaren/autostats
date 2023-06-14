@@ -72,4 +72,4 @@ class Preprocess:
         assert all(isinstance(x, (str, int)) for x in dataset[labels]), "Not categorical variables for groups: labels are neither strings nor integers"
 
         
-        return dataset.group_comparison_norm()
+        return dataset

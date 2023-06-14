@@ -48,10 +48,11 @@ from typing import List, Dict, Callable, Tuple
 
 
 class GroupComparisonAnalyzer:
-    def __init__(self, dataset, labels):
+    def __init__(self, dataset, labels, output_path=None):
         self.dataset:pd.DataFrame = dataset
         self.labels:str = labels
         self.combinations = self.create_comb()
+        self.output_path = output_path
 
     def create_comb(self) -> List[Tuple[str, str]]:
         """helper function to create all pairwise combinations of groups and features
@@ -225,6 +226,32 @@ class GroupComparisonAnalyzer:
         print(pivot_df)
         return pivot_df
     
+    def visualize_group_comparison(self, group_res) -> None:
+        """_summary_
+
+        Args:
+            norm_test (pd.DataFrame): _description_
+            var_test (pd.DataFrame): _description_
+            dependence (str, optional): _description_. Defaults to "independent".
+        """
+        for combination in self.combinations:
+            
+            for feature in self.dataset.columns.drop(self.labels):
+
+                p_value = group_res.loc[combination][feature]
+
+                # plt.figure(figsize=(10, 6))
+            
+                # Violin Plot
+                # plt.subplot(1, 2, 1)
+                sns.violinplot(x=self.labels, y=feature, data=self.dataset)
+                plt.title(f"Violin Plot - {feature}: p-value {p_value} ")
+                
+                # save figure
+                plt.savefig(os.path.join(self.output_path, f"violin_plot_{feature}.png"))
+                plt.close()
+
+    
     def run_group_comparison(self, dependence="independent") -> pd.DataFrame:
         """_summary_
 
@@ -239,6 +266,7 @@ class GroupComparisonAnalyzer:
         norm_test_result = self.group_comparison_norm()
         var_test_result = self.group_comparison_var(norm_test=norm_test_result)
         res = self.choose_stat_test(norm_test=norm_test_result, var_test=var_test_result, dependence=dependence)
+        self.visualize_group_comparison(res)
         return res
 
 if __name__ == "__main__":

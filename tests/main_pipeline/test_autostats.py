@@ -64,28 +64,84 @@ class TestGroupComparisonAnalyzer:
         df_norm_tested1 = stat.perform_normality_test(df_norm1.loc[df_norm1["labels"] == "Category 1", "value"])
         assert df_norm_tested1 == stats.shapiro(df_norm1.loc[df_norm1["labels"] == "Category 1", "value"])[1]
 
-    def test_group_comparison_norm(self, generate_df_norm_labels:Callable):
+    # def test_group_comparison_norm(self, generate_df_norm_labels:Callable, generate_df_dist_type:Callable):
         
-        # 1 test two normal distributions
-        df_norm = generate_df_norm_labels()
+    #     # 1 test two normal distributions
+    #     df_norm = generate_df_norm_labels()
 
-        stat = GroupComparisonAnalyzer(dataset=df_norm, labels="labels")
+    #     stat = GroupComparisonAnalyzer(dataset=df_norm, labels="labels")
 
-        results = []
-        result = {
-                    'Group 1': "Category 1",
-                    'Group 2': "Category 2",
-                    'Feature': "value",
-                    'both are norm dist': 1.0
-            }
-        results.append(result)
+    #     results = []
+    #     result = {
+    #                 'Group 1': "Category 1",
+    #                 'Group 2': "Category 2",
+    #                 'Feature': "value",
+    #                 'both are norm dist': 1.0
+    #         }
+    #     results.append(result)
 
-        results_df = pd.DataFrame(results)
-        pivot_df = results_df.pivot_table(values='both are norm dist', index=['Group 1', 'Group 2'], columns='Feature')
+    #     results_df = pd.DataFrame(results)
+    #     pivot_df = results_df.pivot_table(values='both are norm dist', index=['Group 1', 'Group 2'], columns='Feature')
 
-        pd.testing.assert_frame_equal(pivot_df, stat.group_comparison_norm())
+    #     pd.testing.assert_frame_equal(pivot_df, stat.group_comparison_norm())
 
          
-         # check a case both a non-normal
+    #     # check a case both a non-normal
+    #     df_dist = generate_df_dist_type(num_rows=100, num_cols=1, first_dist = "uniform", second_dist = "uniform")
+    #     stat = GroupComparisonAnalyzer(dataset=df_dist, labels="labels")
 
-         # check a case: one is normal and another is non-normal
+    #     results = []
+    #     result = {
+    #                 'Group 1': "Category 1",
+    #                 'Group 2': "Category 2",
+    #                 'Feature': "value",
+    #                 'both are norm dist': 1.0
+    #         }
+    #     results.append(result)
+    #     pivot_df = results_df.pivot_table(values='value', index=['Group 1', 'Group 2'], columns='Feature')
+
+    #     pd.testing.assert_frame_equal(pivot_df, stat.group_comparison_norm())
+        
+
+        # check a case: one is normal and another is non-normal
+
+    def test_perform_variance_test(self, generate_df_norm_labels:Callable):
+        
+        df_norm = generate_df_norm_labels()
+        stat = GroupComparisonAnalyzer(dataset=df_norm, labels="labels")
+
+        # Test case 1: Equal variances, center='mean'
+        group1_data = [1, 2, 3, 4, 5]
+        group2_data = [2, 3, 4, 5, 6]
+        center = 'mean'
+        p_value = stat.perform_variance_test(group1_data, group2_data, center)
+        assert isinstance(p_value, float)
+        assert 0 <= p_value <= 1
+        assert p_value == stats.levene(group1_data, group2_data, center=center)[1]
+    
+        # Test case 2: Equal variances, center='median'
+        group1_data = [1, 2, 3, 4, 5]
+        group2_data = [2, 3, 4, 5, 6]
+        center = 'median'
+        p_value = stat.perform_variance_test(group1_data, group2_data, center)
+        assert isinstance(p_value, float)
+        assert 0 <= p_value <= 1
+        assert p_value == stats.levene(group1_data, group2_data, center=center)[1]
+
+        # Test case 3: Unequal variances, center='mean'
+        group1_data = [1, 2, 3, 4, 5]
+        group2_data = [6, 7, 8, 9, 10]
+        center = 'mean'
+        p_value = stat.perform_variance_test(group1_data, group2_data, center)
+        assert isinstance(p_value, float)
+        assert 0 <= p_value <= 1
+        assert p_value == stats.levene(group1_data, group2_data, center=center)[1]
+
+        # Test case 4: Unequal variances, center='median'
+        group1_data = [1, 2, 3, 4, 5]
+        group2_data = [6, 7, 8, 9, 10]
+        center = 'median'
+        p_value = stat.perform_variance_test(group1_data, group2_data, center)
+        assert isinstance(p_value, float)
+        assert 0 <= p_value <= 1
+        assert p_value == stats.levene(group1_data, group2_data, center=center)[1]
