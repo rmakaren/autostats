@@ -16,6 +16,7 @@ import pingouin as pg
 from statsmodels.stats.anova import AnovaRM
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
+from statsmodels.stats.multitest import multipletests
 
 import warnings
 import time
@@ -111,7 +112,6 @@ class GroupComparisonAnalyzer:
 
         results_df = pd.DataFrame(results)
         pivot_df = results_df.pivot_table(values='both are norm dist', index=['Group 1', 'Group 2'], columns='Feature')
-        print("norm_test", pivot_df)
         return pivot_df
 
     def perform_variance_test(self, group1_data, group2_data, center:str) -> pd.DataFrame:
@@ -160,10 +160,16 @@ class GroupComparisonAnalyzer:
 
         results_df = pd.DataFrame(results)
         pivot_df = results_df.pivot_table(values='p-value', index=['Group 1', 'Group 2'], columns='Feature')
-        print(pivot_df)
         return pivot_df
 
-
+    def adjust_p_values(self, p_values:List[float]) -> List[float]:
+        if len(p_values) <= 50 and len(p_values) > 3:
+            adjusted_p_values = multipletests(p_values, method='bonferroni')[1]
+        elif len(p_values) > 50:
+            adjusted_p_values = multipletests(p_values, method='fdr_bh')[1]
+        else:
+            raise ValueError("Invalid adjustment method")
+        return adjusted_p_values
 
     def choose_stat_test(self, norm_test: pd.DataFrame, var_test: pd.DataFrame, dependence="independent") -> pd.DataFrame:
         """_summary_
@@ -172,6 +178,7 @@ class GroupComparisonAnalyzer:
             norm_test (pd.DataFrame): _description_
             var_test (pd.DataFrame): _description_
             dependence (str, optional): _description_. Defaults to "independent".
+            adjustment (str, optional): The p-value adjustment method to use ("bonferroni" or "benjamini-hochberg"). Defaults to None.
 
         Raises:
             ValueError: _description_
@@ -215,14 +222,22 @@ class GroupComparisonAnalyzer:
                     'Group 1': group1,
                     'Group 2': group2,
                     'Feature': feature,
-                    'stat-test': stat_test
+                    'p-value': stat_test
                 }
                 results.append(result)
 
         results_df = pd.DataFrame(results)
-        pivot_df = results_df.pivot_table(values='stat-test', index=['Group 1', 'Group 2'], columns='Feature')
+        pivot_df = results_df.pivot_table(values='p-value', index=['Group 1', 'Group 2'], columns='Feature')
+        print(pivot_df)
+
+        if len(pivot_df.values.flatten()) > 2:
+            adjusted_p_values = self.adjust_p_values(pivot_df.values.flatten())
+            print("adjusted_p_values", adjusted_p_values)
+            pivot_df = pd.DataFrame(adjusted_p_values.reshape(pivot_df.shape), index=pivot_df.index, columns=pivot_df.columns)
+
         pivot_df.to_csv(os.path.join(self.output_path, f"group_test_res.csv"))
         return pivot_df
+
     
     def visualize_group_comparison(self, group_res) -> None:
         """_summary_
@@ -250,7 +265,7 @@ class GroupComparisonAnalyzer:
                 plt.close()
 
     
-    def run_group_comparison(self, dependence="independent") -> pd.DataFrame:
+    def run_group_comparison(self, dependence="independent", adjustment=None) -> pd.DataFrame:
         """_summary_
 
         Args:
