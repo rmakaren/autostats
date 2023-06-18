@@ -258,6 +258,7 @@ class GroupComparisonAnalyzer:
                 # Violin Plot
                 # plt.subplot(1, 2, 1)
                 sns.violinplot(x=self.labels, y=feature, data=self.dataset)
+                sns.swarmplot(x =self.labels, y =feature, data = self.dataset, color= "black")
                 plt.title(f"Violin Plot - {feature}: p-value {p_value} ")
                 
                 # save figure
