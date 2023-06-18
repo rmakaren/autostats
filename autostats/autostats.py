@@ -1,3 +1,8 @@
+##################################################
+# Rostyslav Makarenko 09/2023 ####################
+# all rights reserved ############################
+##################################################
+
 import os
 import copy
 import pandas as pd
@@ -11,6 +16,7 @@ import pingouin as pg
 from statsmodels.stats.anova import AnovaRM
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
+from statsmodels.stats.multitest import multipletests
 
 import warnings
 import time
@@ -32,310 +38,254 @@ import seaborn as sns
 from sklearn.datasets import load_iris
 
 
-class AutoStat:
-    def __init__(
-        self, 
-        dataset: pd.DataFrame = None, 
-        labels: str = None, 
-        output_dir: str = None, 
-        dependence:str = "independent"
-    ) -> None:
+import pandas as pd
+import seaborn as sns
+from scipy import stats
+from statsmodels.stats.anova import AnovaRM
+import statsmodels.api as sm
+import pingouin as pg
+
+from typing import List, Dict, Callable, Tuple
+
+
+class GroupComparisonAnalyzer:
+    def __init__(self, dataset, labels, output_path=None):
+        self.dataset:pd.DataFrame = dataset
+        self.labels:str = labels
+        self.combinations = self.create_comb()
+        self.output_path = output_path
+
+    def create_comb(self) -> List[Tuple[str, str]]:
+        """helper function to create all pairwise combinations of groups and features
+        for group comparison
+
+        Returns:
+            List[tuple]: list of the tuples
+        """
+        groups = self.dataset[self.labels].unique()
+        combinations = [(groups[i], groups[j]) for i in range(len(groups)) for j in range(i+1, len(groups))]
+        # print(combinations)
+        assert len(combinations) != 0, "no group combinations were created"
+        return combinations
+
+    def perform_normality_test(self, data:pd.Series) -> float:
+        """Choose test for normality depending on the data size: either Shapiro-Wilk test or
+        Kogmolorov-Smirnov test and perform that test
+
+        Args:
+            data (pd.DataFrame): pandas Series
+
+        Returns:
+            Callable: p-value as a results of the test for normality
+        """
+        if len(data) <= 50:
+            return stats.shapiro(data)[1]
+        else:
+            return stats.kstest(data, cdf='norm')[1]
+
+    def group_comparison_norm(self) -> pd.DataFrame:
+        """performs test for normality on the given dataset with the corresponds to the groups of interest
+        and checks if all groups for given feature pass the test for normality
+
+        Returns:
+            _type_: a pivot table, pandas dataframe with either 1 or 2 values. 1 - if 
+        """
+        results = []
+
+        for combination in self.combinations:
+            group1, group2 = combination
+
+            for feature in self.dataset.columns.drop(self.labels):
+                group1_data = self.dataset[self.dataset[self.labels] == group1][feature]
+                group2_data = self.dataset[self.dataset[self.labels] == group2][feature]
+
+                p_value = all(pd.Series([self.perform_normality_test(group1_data),
+                                         self.perform_normality_test(group2_data)]) > 0.05)
+
+                result = {
+                    'Group 1': group1,
+                    'Group 2': group2,
+                    'Feature': feature,
+                    'both are norm dist': p_value
+                }
+                results.append(result)
+
+        results_df = pd.DataFrame(results)
+        pivot_df = results_df.pivot_table(values='both are norm dist', index=['Group 1', 'Group 2'], columns='Feature')
+        return pivot_df
+
+    def perform_variance_test(self, group1_data, group2_data, center:str) -> pd.DataFrame:
         """_summary_
 
         Args:
-            dataset (pd.DataFrame, optional): _description_. Defaults to None.
-            labels (str, optional): _description_. Defaults to None.
-            output_dir (str, optional): _description_. Defaults to None.
+            group1_data (_type_): _description_
+            group2_data (_type_): _description_
+            center (str): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+        return stats.levene(group1_data, group2_data, center=center)[1]
+
+    def group_comparison_var(self, norm_test:pd.DataFrame) -> pd.DataFrame:
+        """_summary_
+
+        Args:
+            norm_test (pd.DataFrame): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+        results = []
+
+        for combination in self.combinations:
+            group1, group2 = combination
+
+            for feature in self.dataset.columns.drop(self.labels):
+                norm_value = norm_test.loc[combination][feature]
+                center = "mean" if norm_value == 1 else "median"
+
+                group1_data = self.dataset[self.dataset[self.labels] == group1][feature]
+                group2_data = self.dataset[self.dataset[self.labels] == group2][feature]
+
+                p_value = self.perform_variance_test(group1_data, group2_data, center)
+
+                result = {
+                    'Group 1': group1,
+                    'Group 2': group2,
+                    'Feature': feature,
+                    'p-value': p_value
+                }
+                results.append(result)
+
+        results_df = pd.DataFrame(results)
+        pivot_df = results_df.pivot_table(values='p-value', index=['Group 1', 'Group 2'], columns='Feature')
+        return pivot_df
+
+    def adjust_p_values(self, p_values:List[float]) -> List[float]:
+        if len(p_values) <= 50 and len(p_values) > 3:
+            adjusted_p_values = multipletests(p_values, method='bonferroni')[1]
+        elif len(p_values) > 50:
+            adjusted_p_values = multipletests(p_values, method='fdr_bh')[1]
+        else:
+            raise ValueError("Invalid adjustment method")
+        return adjusted_p_values
+
+    def choose_stat_test(self, norm_test: pd.DataFrame, var_test: pd.DataFrame, dependence="independent") -> pd.DataFrame:
+        """_summary_
+
+        Args:
+            norm_test (pd.DataFrame): _description_
+            var_test (pd.DataFrame): _description_
+            dependence (str, optional): _description_. Defaults to "independent".
+            adjustment (str, optional): The p-value adjustment method to use ("bonferroni" or "benjamini-hochberg"). Defaults to None.
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+
+        results = []
+        
+        for combination in self.combinations:
+            group1, group2 = combination
+            
+            for feature in self.dataset.columns.drop(self.labels):
+                norm_value = norm_test.loc[combination][feature]
+                var_value = var_test.loc[combination][feature]
+
+                group1_data = self.dataset[self.dataset[self.labels] == group1][feature]
+                group2_data = self.dataset[self.dataset[self.labels] == group2][feature]
+                
+                if norm_value == 1 and var_value < 0.05 and dependence == "independent":
+                    stat_test = stats.f_oneway(group1_data, group2_data)[1]
+                elif norm_value == 1 and var_value < 0.05 and dependence == "paired":
+                    stat_test = sm.stats.anova.AnovaRM(self.dataset, feature, subject=self.labels, within=[group1, group2]).fit()
+                elif norm_value == 1 and var_value >= 0.05 and dependence == "independent":
+                    stat_test = pg.welch_anova(self.dataset, dv=feature, between=self.labels).loc[0, 'p-unc']
+                elif norm_value == 1 and var_value >= 0.05 and dependence == "paired":
+                    stat_test = sm.stats.anova_lm(sm.stats.OLS(self.dataset[group1][feature], sm.tools.add_constant(self.dataset[group2][feature]))).F[0]
+                elif norm_value == 0 and var_value < 0.05 and dependence == "independent":
+                    stat_test = stats.kruskal(group1_data, group2_data)[1]
+                elif norm_value == 0 and var_value < 0.05 and dependence == "paired":
+                    stat_test =  stats.friedmanchisquare(group1_data, group2_data)[1]
+                elif norm_value == 0 and var_value >= 0.05 and dependence == "independent":
+                    stat_test = stats.median_test(group1_data, group2_data)[1]
+                elif norm_value == 0 and var_value >= 0.05 and dependence == "paired":
+                    stat_test = stats.wilcoxon(group1_data, group2_data)[1]
+                else:
+                    raise ValueError("something went wrong")
+                
+                result = {
+                    'Group 1': group1,
+                    'Group 2': group2,
+                    'Feature': feature,
+                    'p-value': stat_test
+                }
+                results.append(result)
+
+        results_df = pd.DataFrame(results)
+        pivot_df = results_df.pivot_table(values='p-value', index=['Group 1', 'Group 2'], columns='Feature')
+        print(pivot_df)
+
+        if len(pivot_df.values.flatten()) > 2:
+            adjusted_p_values = self.adjust_p_values(pivot_df.values.flatten())
+            print("adjusted_p_values", adjusted_p_values)
+            pivot_df = pd.DataFrame(adjusted_p_values.reshape(pivot_df.shape), index=pivot_df.index, columns=pivot_df.columns)
+
+        pivot_df.to_csv(os.path.join(self.output_path, f"group_test_res.csv"))
+        return pivot_df
+
+    
+    def visualize_group_comparison(self, group_res) -> None:
+        """_summary_
+
+        Args:
+            norm_test (pd.DataFrame): _description_
+            var_test (pd.DataFrame): _description_
             dependence (str, optional): _description_. Defaults to "independent".
         """
+        for combination in self.combinations:
+            
+            for feature in self.dataset.columns.drop(self.labels):
 
-        self.dataset = dataset
-        self.labels = labels
-        self.output_dir = output_dir
-        self.dependence = dependence
+                p_value = group_res.loc[combination][feature]
 
-    def preprocessing(self, dataset:pd.DataFrame, labels:str) -> pd.DataFrame:
-        """Cleaning the dataframe from missing values, duplicates, and infinite values,
-        and dropping the labels column.
-
-        Args:
-            dataset (pd.DataFrame): _description_
-            labels (str): _description_
-
-        Returns:
-            pd.DataFrame: _description_
-        """
-
-        # drop missing values, duplicates, and infinite values
-        dataset = dataset.replace([np.inf, -np.inf], np.nan)
-        dataset = dataset.dropna()
-        dataset = dataset.reset_index(drop=True)
-        dataset = dataset.drop_duplicates()
-        # dataset = dataset.drop(columns=[labels])
-        dataset = dataset.reset_index(drop=True)
-
-        # drop missing values, duplicates, and infinite values, time-series
-        dataset = dataset.replace([np.inf, -np.inf], np.nan)
-        dataset = dataset.dropna()
-        dataset = dataset.reset_index(drop=True)
-        dataset = dataset.drop_duplicates()
-        dataset = dataset.reset_index(drop=True)
-        dataset = dataset.select_dtypes(exclude=['datetime64'])
-        dataset = dataset.reset_index(drop=True)
-
-        # we remove the columns that have less than 5 unique values except the labels column
-        dataset = dataset.loc[:, (dataset.nunique() >= 5) | (dataset.columns == labels)]
-
-        # if after cleaning dataset is no more, return None
-        assert type(dataset) != None, "The dataset is None, check the dataset"
-
-        # check if the dataset is empty
-        assert dataset.empty != True, "The dataset is empty"
-        
-        # check if the dataset has only one column
-        assert len(dataset.columns) != 1, "The dataset has only one column"
-
-        # check if the dataset has only one row
-        assert len(dataset.index) != 1, "The dataset has only one row"
-        
-        # check if the dataset has enough data for analysis one unique value
-        assert len(dataset[labels].unique()) != 1, "Not enough samples in dataset, statistical tests are not appliable"
-        assert len(dataset) >= 5, "Not enough samples in dataset, statistical tests are not appliable"
-        
-        # check if labels are either strings or integers
-        assert all(isinstance(x, (str, int)) for x in dataset[labels]), "Not categorical variables for groups: labels are neither strings nor integers"
-
-        print("comparing two or more groups")
-        return dataset
-
-
-    def normality_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> pd.DataFrame:
-        """ Here we check the data for normality by QQplot visualisation and statistical tests
-        per each feature we compare in the group. the output results for normality test are saved
-        in .csv file 
-
-        Args:
-            dataset (_type_): _description_
-            labels (_type_): _description_
-            output_dir (_type_): _description_
-
-        Returns:
-            pd.DataFrame: _description_
-        """
-
-        def normality_tests(dataset:pd.DataFrame, labels=labels) -> pd.DataFrame:
-            results = {}
-            for col in dataset.columns.drop(labels):
-                if len(dataset)<= 50:
-                    norm_test = stats.shapiro
-                    # print(f"using shapiro test for {col}")
-                    _, shapiro_pval = norm_test(dataset[col])
-                    results[col] = {"shapiro": shapiro_pval}
-                elif len(dataset)>50:
-                    norm_test = stats.kstest
-                    # print(f"using ks test for {col}")
-                    _, ks_pval = norm_test(dataset[col], "norm")
-                    results[col] = {"ks": ks_pval}
-            return pd.DataFrame(results)
-
-        norm_res = dataset.groupby([labels]).apply(normality_tests)
-
-        # visualise results of normality tests with QQplots
-        norm_dir = os.path.join(output_dir, "normality_test")
-        os.makedirs(norm_dir, exist_ok=True)
-
-        unique_observations = dataset[labels].unique()
-        columns = dataset.columns.tolist()
-        columns.remove(labels)
-        # calculate test statistics
-        for observation in unique_observations:
-            ix_a = dataset[labels] == observation
-            for x in columns:
-                fig = plt.figure()
-                ax = fig.add_subplot(111)
-                res = stats.probplot(dataset[x][ix_a], dist ='norm', plot=ax)
-                ax.set_title(f"qqplot_norm_{x}_{observation}")
-                plt.savefig(os.path.join(norm_dir, f"qqplot_norm_{x}_{observation}.png"))
+                # plt.figure(figsize=(10, 6))
+            
+                # Violin Plot
+                # plt.subplot(1, 2, 1)
+                sns.violinplot(x=self.labels, y=feature, data=self.dataset)
+                plt.title(f"Violin Plot - {feature}: p-value {p_value} ")
+                
+                # save figure
+                plt.savefig(os.path.join(self.output_path, f"violin_plot_{feature}.png"))
                 plt.close()
 
-        # save the results of normality test
-        norm_res.to_csv(os.path.join(norm_dir, "norm_test.csv"))
-        return norm_res
-
-
-    def variance_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, output_dir:str) -> pd.DataFrame:
-        """We perform test for equality of variances between groups 
-        (both on normally and non-normally distributed data) 
-        to choose an appropriate test for statistical analysis for group comparison. 
-        1) There are less than 50 datapoints and data is normally distributed
-            -> Levene's test for equality of variances
-        2) There are more than 50 datapoints and data is normally distributed
-            -> Bartlett's test test for equality of variances
-        3) Data is not normally distributed
-            -> "Brown-Forsythe test for variance homogeneity
-
-
-        Args:
-            dataset (pd.DataFrame): _description_
-            labels (_type_): _description_
-            norm_res (pd.DataFrame): _description_
-
-        Returns:
-            pd.DataFrame: _description_
-        """
-        
-        var_res = {}
-        for column in dataset.columns.drop(labels):
-            if all(norm_res[column] > 0.05):
-                stat_test = stats.levene
-                center = "mean"
-            elif any(norm_res[column] < 0.05):
-                stat_test = stats.levene
-                center = "median"
-            var_res[column] = round(stat_test(*(dataset.loc[dataset[labels] == group, column] 
-                        for group in dataset[labels].unique()), center=center)[1], 7)
-        
-        var_res = pd.DataFrame.from_dict(var_res, orient='index', columns=["variance_test"]).T
-        var_res.to_csv(path_or_buf=os.path.join(output_dir, "var_test.csv"))
-        return var_res
-
-    def choose_group_test(self, dataset:pd.DataFrame, labels:str, norm_res:pd.DataFrame, var_res:pd.DataFrame) -> Callable:
-        """Choose a group test on the results of normality and variance tests
-
-        Args:
-            dataset (pd.DataFrame): _description_
-            labels (str): _description_
-            norm_res (pd.DataFrame): _description_
-            var_res (pd.DataFrame): _description_
-            output_dir (str): _description_
-            dependence (str): _description_
-
-        Returns:
-            function: test function to perform pairwise comparison of groups
-        """
-        group_test = {}
-        for column in dataset.columns.drop(labels):
-            if all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] > 0.05):
-                print(column, "normal distribution, equal variance")
-                if self.dependence == "independent":
-                    group_test[column] = stats.f_oneway
-                elif self.dependence == "dependent":
-                    group_test[column] = AnovaRM
-            elif all(norm_res[column] > 0.05) & (var_res.loc['variance_test'][column] < 0.05):
-                print(column, "normal distribution, unequal variance")
-                if self.dependence == "independent":
-                    group_test[column] = pg.welch_anova
-                elif self.dependence == "dependent":
-                    group_test[column] =  sm.stats.anova_lm
-            elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] > 0.05):
-                print(column, "not normal distribution, equal variance")
-                if self.dependence == "independent":
-                    group_test[column] = stats.kruskal
-                if self.dependence == "dependent":
-                    group_test[column] = stats.friedmanchisquare
-            elif any(norm_res[column] < 0.05) & (var_res.loc['variance_test'][column] < 0.05):
-                print(column, "not normal distribution, unequal variance")
-                if self.dependence == "independent":
-                    group_test[column] = stats.median_test
-                elif self.dependence == "dependent":
-                    group_test[column] = stats.wilcoxon
-            else:
-                print(column, "something is wrong")
-        print(group_test)
-        return group_test
-
-
-    def make_stat_report(self, group_test:Dict[str, Callable], dataset:pd.DataFrame, labels:str, output_dir:str) -> None:
+    
+    def run_group_comparison(self, dependence="independent", adjustment=None) -> pd.DataFrame:
         """_summary_
 
         Args:
-            dataset (pd.DataFrame): _description_
-            labels (_type_): _description_
-            stat_test (Callable): _description_
-            output_dir (_type_): _description_
+            norm_test (pd.DataFrame): _description_
+            var_test (pd.DataFrame): _description_
+            dependence (str, optional): _description_. Defaults to "independent".
 
         Returns:
             pd.DataFrame: _description_
         """
+        norm_test_result = self.group_comparison_norm()
+        var_test_result = self.group_comparison_var(norm_test=norm_test_result)
+        res = self.choose_stat_test(norm_test=norm_test_result, var_test=var_test_result, dependence=dependence)
+        self.visualize_group_comparison(res)
+        return res
 
-        describe_stats = round(
-            pd.DataFrame(dataset.groupby([labels]).describe().transpose()), 3
-        )
-        for column in dataset.columns.drop(labels):
-            if group_test[column] in [stats.f_oneway, 
-                              stats.kruskal, 
-                              stats.friedmanchisquare, 
-                              stats.median_test, 
-                              stats.wilcoxon,
-                              AnovaRM]:
-                describe_stats.loc[(column, "mean"), "pvalue"] = group_test[column](
-                    *(
-                    dataset.loc[dataset[labels] == group, column]
-                    for group in dataset[labels].unique()
-                    )
-                    )[1]
-            elif group_test[column] in [pg.welch_anova]:
-                describe_stats.loc[(column, "mean"), "pvalue"] = group_test[column](
-                    dataset, dv=column, between=labels, detailed=True
-                ).loc[labels, "p-unc"]
-            elif group_test[column] in [sm.stats.anova_lm]:
-                describe_stats.loc[(column, "mean"), "pvalue"] = group_test[column](
-                    dataset, dv=column, between=labels
-                    )["PR(>F)"][0]
-            else:
-                print(column, "something is wrong")
-            sns.violinplot(data=dataset, x=labels, y=column)
-            sns.swarmplot(x = labels, y =column, data = dataset,color= "k", alpha = 0.75, size = 4.5)
-            sns.violinplot(data=dataset, x=labels, y=column).set(
-                    title=f'p-value = {describe_stats.loc[(column, "mean"), "pvalue"]}'
-                )
-            plt.savefig(os.path.join(output_dir, f"compplot_{column}.png"))
-            plt.clf()
-
-        describe_stats.to_csv(os.path.join(output_dir, f"comp_stats.csv"))
-
-
-    def auto_stat_test(self, dataset:pd.DataFrame, labels:str, output_dir:str) -> None:
-        """_summary_
-
-        Args:
-            dataset (pd.DataFrame): a dataset you would like to use for analysis
-            labels (str): your categories you would like to use for stat analysis, name of the column
-
-        Returns:
-            pd.DataFrame: _description_
-        """
-
-        
-        start_time = time.time()
-        
-        dataset = self.preprocessing(dataset, labels)
-
-        if os.path.exists(output_dir) == False:
-            os.makedirs(output_dir)
-
-        norm_res = self.normality_test(dataset, labels, output_dir)
-        var_res = self.variance_test(dataset, labels, norm_res, output_dir)
-        group_test = self.choose_group_test(dataset, labels, norm_res, var_res)
-        self.make_stat_report(group_test=group_test, dataset=dataset, labels = "species", output_dir=output_dir)
-        print("--- %s seconds ---" % (time.time() - start_time))
-        return norm_res
-
-
-
-if __name__ == "main":
-
-    print("starting")
-    iris = load_iris()
-    df_iris = pd.DataFrame(
-        data=np.c_[iris["data"], iris["target"]],
-        columns=iris["feature_names"] + ["target"],
-    )
-    df_iris["species"] = pd.Categorical.from_codes(iris.target, iris.target_names)
-    # we start from simpler: assume there are only two species and only two valuables to compare, e.g. 2x2 matrix
-    df_iris = df_iris[df_iris["species"] != "setosa"]
-    df_iris = df_iris[["sepal length (cm)", "sepal width (cm)", "species"]]
-
-    stat_test = AutoStat()
-    stat_test.auto_stat_test(dataset=df_iris, labels="species")
-    print("done")
+if __name__ == "__main__":
+    df_iris = sns.load_dataset("iris")
+    analyzer = GroupComparisonAnalyzer(dataset=df_iris, labels="species")
+    norm_test_result = analyzer.group_comparison_norm()
+    var_test_result = analyzer.group_comparison_var(norm_test=norm_test_result)
+    group_test = analyzer.choose_stat_test(norm_test=norm_test_result, var_test=var_test_result)
+    
