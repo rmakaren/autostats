@@ -19,6 +19,14 @@
             "program": "dev_snippet.py",
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "run app",
+            "type": "python",
+            "request": "launch",
+            "program": "app.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }

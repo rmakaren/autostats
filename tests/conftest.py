@@ -150,3 +150,44 @@ def generate_norm_res():
         df = pd.DataFrame(data, columns=pd.MultiIndex.from_tuples([('labels', '')]))
         return df
     return _generate_norm_res
+
+
+@pytest.fixture
+def generate_df_dist_type() -> Callable[..., pd.DataFrame]:
+    def _generate_df_dist_type(num_rows:int, num_cols:int, labels:list=["Category 1", "Category 2"], 
+                               first_dist:str = "normal", 
+                               second_dist:str = "normal") -> pd.DataFrame:
+        """generates dataframe with two labels (to create groups) of any distribution (uniform, normal, exponential)
+
+        Args:
+            num_rows (int): _description_
+            num_cols (int): _description_
+            num_missing (int): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+
+        if first_dist == "normal":
+            data1 = np.random.normal(loc=1, scale=100, size=(num_rows, num_cols))
+        elif first_dist == "uniform":
+            data1 = np.random.uniform(low=1, high=100, size=(num_rows, num_cols))
+        
+        if second_dist == "normal":
+            data2 = np.random.normal(loc=1, scale=100, size=(num_rows, num_cols))
+        elif second_dist == "uniform":
+            data2 = np.random.uniform(low=1, high=100, size=(num_rows, num_cols))
+        
+        df_label_one = pd.DataFrame(data1)
+        df_label_one.columns = ["value"]
+        df_label_one["labels"] = labels[0]
+
+        df_label_two = pd.DataFrame(data2)
+        df_label_two.columns = ["value"]
+        df_label_two["labels"] = labels[1]
+
+        df = pd.concat([df_label_one, df_label_two])
+
+
+        return df
+    return _generate_df_dist_type
