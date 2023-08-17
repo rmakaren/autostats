@@ -88,3 +88,26 @@ res = stats.run_group_comparison(adjustment="bonferroni")
 # res = stats.run_group_comparison()
 
 # %%
+
+import  os
+import pandas as pd
+import numpy as np
+
+
+from autostats.preprocessing import Preprocess
+from autostats.autostats import GroupComparisonAnalyzer
+
+
+
+df = pd.read_csv("/media/rostyslav/Toshiba/Projects/age-related-conditions/01-data/01-raw/icr-identify-age-related-conditions/train.csv", sep=",")
+
+preprocess = Preprocess(dataset=df, labels="Class")
+
+
+dataset_prep = preprocess.preprocessing(dataset=df, labels="Class")
+dataset_prep2 = dataset_prep.drop("Id", axis=1)
+# dataset_prep2.remove_unused_categories()
+stats = GroupComparisonAnalyzer(dataset=dataset_prep2, labels="Class", output_path="/media/rostyslav/Toshiba/Projects/autostats/02-output/")
+res = stats.run_group_comparison(adjustment="bonferroni")
+
+# %%
