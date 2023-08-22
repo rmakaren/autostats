@@ -163,7 +163,7 @@ class GroupComparisonAnalyzer:
         return pivot_df
 
     def adjust_p_values(self, p_values:List[float]) -> List[float]:
-        if len(p_values) <= 50 and len(p_values) > 3:
+        if len(p_values) <= 50 and len(p_values) >= 3:
             adjusted_p_values = multipletests(p_values, method='bonferroni')[1]
         elif len(p_values) > 50:
             adjusted_p_values = multipletests(p_values, method='fdr_bh')[1]
@@ -200,20 +200,28 @@ class GroupComparisonAnalyzer:
                 group2_data = self.dataset[self.dataset[self.labels] == group2][feature]
                 
                 if norm_value == 1 and var_value > 0.05 and dependence == "independent":
+                    print(f"Using one-way ANOVA on {feature}")
                     stat_test = stats.f_oneway(group1_data, group2_data)[1]
                 elif norm_value == 1 and var_value > 0.05 and dependence == "paired":
+                    print(f"Using repeated measures ANOVA on {feature}")
                     stat_test = sm.stats.anova.AnovaRM(self.dataset, feature, subject=self.labels, within=[group1, group2]).fit()
                 elif norm_value == 1 and var_value <= 0.05 and dependence == "independent":
+                    print(f"Using Welch ANOVA on {feature}")
                     stat_test = pg.welch_anova(self.dataset, dv=feature, between=self.labels).loc[0, 'p-unc']
                 elif norm_value == 1 and var_value <= 0.05 and dependence == "paired":
+                    print(f"Using ANOVA with GG correction on {feature}")
                     stat_test = sm.stats.anova_lm(sm.stats.OLS(self.dataset[group1][feature], sm.tools.add_constant(self.dataset[group2][feature]))).F[0]
                 elif norm_value == 0 and var_value < 0.05 and dependence == "independent":
+                    print(f"Using Kruskal-Wallis H-test on {feature}")
                     stat_test = stats.kruskal(group1_data, group2_data)[1]
                 elif norm_value == 0 and var_value < 0.05 and dependence == "paired":
+                    print(f"Friedman test on {feature}")
                     stat_test =  stats.friedmanchisquare(group1_data, group2_data)[1]
                 elif norm_value == 0 and var_value >= 0.05 and dependence == "independent":
+                    print(f"Using Mood's median test on {feature}")
                     stat_test = stats.median_test(group1_data, group2_data)[1]
                 elif norm_value == 0 and var_value >= 0.05 and dependence == "paired":
+                    print(f"Using sign test on {feature}")
                     stat_test = stats.wilcoxon(group1_data, group2_data)[1]
                 else:
                     raise ValueError("something went wrong")
@@ -259,7 +267,7 @@ class GroupComparisonAnalyzer:
                 # plt.subplot(1, 2, 1)
                 sns.violinplot(x=self.labels, y=feature, data=self.dataset)
                 sns.swarmplot(x =self.labels, y =feature, data = self.dataset, color= "black")
-                plt.title(f"Violin Plot - {feature}: p-value {p_value} ")
+                plt.title(f"{feature}: p-value {p_value} ")
                 
                 # save figure
                 plt.savefig(os.path.join(self.output_path, f"violin_plot_{feature}.png"))

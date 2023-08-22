@@ -20,6 +20,25 @@ class Preprocess:
         self.labels = labels
 
 
+    def drop_non_numeric_columns(self, dataset:pd.DataFrame, labels:str) -> pd.DataFrame:
+        """drop all non-numeric columns from the dataset for statistical analysis
+
+        Args:
+            dataset (pd.DataFrame): _description_
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+        columns_to_drop = []
+
+        for column in dataset.columns:
+            if column != labels:
+                if not pd.api.types.is_numeric_dtype(dataset[column]):
+                    columns_to_drop.append(column)
+
+        dataset = dataset.drop(columns=columns_to_drop)
+        return dataset
+
     def preprocessing(self, dataset:pd.DataFrame, labels:str) -> pd.DataFrame:
         """Cleaning the dataframe from missing values, duplicates, and infinite values,
         and dropping the labels column.
@@ -31,6 +50,9 @@ class Preprocess:
         Returns:
             pd.DataFrame: _description_
         """
+        
+        # drop non-numeric columns
+        dataset = self.drop_non_numeric_columns(dataset=dataset, labels=labels)
 
         # drop missing values, duplicates, and infinite values
         dataset = dataset.replace([np.inf, -np.inf], np.nan)
@@ -51,7 +73,7 @@ class Preprocess:
 
         # we remove the columns that have less than 5 unique values except the labels column
         dataset = dataset.loc[:, (dataset.nunique() >= 5) | (dataset.columns == labels)]
-
+        # drop non-numeric columns
         # if after cleaning dataset is no more, return None
         assert type(dataset) != None, "The dataset is None, check the dataset"
 
@@ -70,6 +92,5 @@ class Preprocess:
         
         # check if labels are either strings or integers
         assert all(isinstance(x, (str, int)) for x in dataset[labels]), "Not categorical variables for groups: labels are neither strings nor integers"
-
-        
+ 
         return dataset
