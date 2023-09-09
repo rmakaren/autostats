@@ -1,6 +1,6 @@
 # AUTOSTATS documentation
 
-Autostats is a repositorium aiming automatising a choise of statistical tests for group comparison
+Autostats is a repository aiming automating a choise of statistical tests for group comparison
 
 ## Project status
 Project is under development
